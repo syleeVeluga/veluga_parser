@@ -101,6 +101,9 @@ def download_text(job_id: str, db: Session = Depends(get_db)):
 def delete_job(job_id: str, db: Session = Depends(get_db)):
     job = _get_job_or_404(job_id, db)
 
+    if job.status == "running":
+        raise HTTPException(status_code=409, detail="Cannot delete a job that is currently running")
+
     # Delete filesystem artifacts
     if job.file_path:
         job_dir = Path(job.file_path).parent
