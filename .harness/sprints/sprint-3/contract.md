@@ -1,41 +1,21 @@
-# Sprint 3 Contract: Frontend Web UI
+# Sprint 3 Contract: Tailwind CSS 3 → 4
 
-## Sprint Goal
-React 18 + Vite + TailwindCSS frontend with PDF upload, job list, real-time status polling, results viewer, and download buttons. FastAPI serves the built frontend as static files.
+## Goal
+Migrate from Tailwind v3 (PostCSS-based) to Tailwind v4 (CSS-first, Vite plugin).
 
-## Implementation Goals
-1. Vite + React 18 + TailwindCSS + React Router v6 scaffold in `src/frontend/`
-2. `services/api.ts` — typed fetch wrappers for all backend endpoints
-3. `HomePage` (`/`) — UploadZone + JobList with auto-refresh
-4. `JobDetailPage` (`/jobs/:id`) — polling, status badge, metadata, DownloadButtons, ResultsViewer
-5. `useUpload` hook — upload state machine (idle/uploading/error)
-6. `useJobStatus` hook — polling with cleanup on unmount
-7. `JobStatusBadge` component — color-coded status
-8. FastAPI `StaticFiles` mount for production frontend serving
-9. `npm run build` succeeds with no TypeScript errors
+## Success Criteria
+- SC-1: `package.json` lists `tailwindcss: "^4.0.0"` and `@tailwindcss/vite` added; `autoprefixer` removed
+- SC-2: `npm install` completes without errors
+- SC-3: `npm run build` exits 0 with zero TypeScript errors
+- SC-4: `src/styles/index.css` uses `@import "tailwindcss"` (no `@tailwind` directives)
+- SC-5: `vite.config.ts` has `tailwindcss()` in plugins array
+- SC-6: All `flex-shrink-0` renamed to `shrink-0` in all TSX files
 
-## Testable Success Criteria
-- [ ] `npm run build` in `src/frontend/` succeeds (exit code 0, no TS errors)
-- [ ] `npm run lint` passes (no ESLint errors)
-- [ ] HomePage renders UploadZone and JobList
-- [ ] UploadZone validates PDF MIME type client-side and rejects non-PDF
-- [ ] JobList shows job status badges with correct color per status
-- [ ] JobDetailPage polls `GET /api/jobs/:id` every 2 seconds while pending/running
-- [ ] DownloadButtons are disabled until status=completed
-- [ ] ResultsViewer renders text elements and tables from result JSON
-- [ ] FastAPI serves frontend from `src/frontend/dist/` at root `/`
-- [ ] No TypeScript `any` types used (per CLAUDE.md convention)
-
-## Out-of-Scope for This Sprint
-- Playwright E2E tests (heavy setup, nice-to-have)
-- Drag-and-drop (nice-to-have)
-- Search within results (nice-to-have)
+## Out of Scope
+- Adding new Tailwind v4 features
+- Any other upgrades
 
 ## Technical Decisions
-- TailwindCSS v3 (stable, well-supported with Vite)
-- React Router v6 with `createBrowserRouter`
-- Native `fetch` API (no axios)
-- Poll interval: 2 seconds for job detail, 5 seconds for job list
-- Backend API base URL: `http://localhost:8000` in dev (proxied via Vite), relative in prod
-- TypeScript strict mode enabled
-- File structure: components/, pages/, hooks/, services/ under `src/frontend/src/`
+- Use @tailwindcss/vite (v4 Vite plugin), not PostCSS
+- Delete tailwind.config.js (v4 auto-detects content)
+- Remove autoprefixer (no longer needed)
