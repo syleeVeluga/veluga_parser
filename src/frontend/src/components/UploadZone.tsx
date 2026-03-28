@@ -1,4 +1,4 @@
-import { useRef, type ChangeEvent } from 'react'
+import { useState, useRef, type ChangeEvent } from 'react'
 import { useUpload } from '../hooks/useUpload'
 import { useNavigate } from 'react-router-dom'
 
@@ -6,16 +6,18 @@ export function UploadZone() {
   const { state, error, upload } = useUpload()
   const navigate = useNavigate()
   const inputRef = useRef<HTMLInputElement>(null)
+  const [validationError, setValidationError] = useState<string | null>(null)
 
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-      alert('Please select a PDF file.')
+      setValidationError('Please select a PDF file.')
       if (inputRef.current) inputRef.current.value = ''
       return
     }
+    setValidationError(null)
 
     const result = await upload(file)
     if (result) {
@@ -60,8 +62,8 @@ export function UploadZone() {
         disabled={isUploading}
         aria-label="PDF file input"
       />
-      {error && (
-        <p className="mt-2 text-sm text-red-600" role="alert">{error}</p>
+      {(validationError || error) && (
+        <p className="mt-2 text-sm text-red-600" role="alert">{validationError ?? error}</p>
       )}
     </div>
   )

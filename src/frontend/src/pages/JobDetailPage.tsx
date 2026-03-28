@@ -84,7 +84,7 @@ function JobDetail({ jobId }: { jobId: string }) {
       {job?.status === 'completed' && (
         <div>
           <h3 className="text-sm font-semibold text-gray-600 uppercase mb-2">Parsed Content</h3>
-          <ResultsViewer jobId={jobId} />
+          <ResultsViewer jobId={jobId} filename={job.filename} status={job.status} />
         </div>
       )}
 

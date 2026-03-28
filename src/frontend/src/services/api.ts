@@ -94,3 +94,7 @@ export async function deleteJob(jobId: string): Promise<void> {
 export function getDownloadUrl(jobId: string, format: 'json' | 'markdown' | 'text'): string {
   return `/api/jobs/${jobId}/download/${format}`
 }
+
+export function getImageUrl(jobId: string, filename: string): string {
+  return `/api/jobs/${jobId}/images/${encodeURIComponent(filename)}`
+}

@@ -1,9 +1,11 @@
 """
 GET /api/jobs/{job_id}/result — full structured result JSON
 GET /api/jobs/{job_id}/download/{format} — file downloads
+GET /api/jobs/{job_id}/images/{filename} — serve extracted image files
 DELETE /api/jobs/{job_id} — delete job and files
 """
 import json
+import mimetypes
 import shutil
 from pathlib import Path
 
@@ -95,6 +97,28 @@ def download_text(job_id: str, db: Session = Depends(get_db)):
         media_type="text/plain",
         filename=f"{job_id}_result.txt",
     )
+
+
+@router.get("/jobs/{job_id}/images/{filename}")
+def get_image(job_id: str, filename: str, db: Session = Depends(get_db)):
+    # Security: reject any path traversal attempts
+    if filename != Path(filename).name or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    _get_job_or_404(job_id, db)
+    parsed = db.query(ParsedResult).filter(ParsedResult.job_id == job_id).first()
+    if not parsed or not parsed.image_dir:
+        raise HTTPException(status_code=404, detail="Image directory not found")
+    image_dir = Path(parsed.image_dir)
+    image_path = image_dir / filename
+    # Security: confirm resolved path is inside the image directory
+    try:
+        image_path.resolve().relative_to(image_dir.resolve())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not image_path.exists():
+        raise HTTPException(status_code=404, detail="Image not found")
+    media_type, _ = mimetypes.guess_type(filename)
+    return FileResponse(path=str(image_path), media_type=media_type or "image/png")
 
 
 @router.delete("/jobs/{job_id}")

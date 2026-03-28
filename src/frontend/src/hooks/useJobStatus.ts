@@ -15,6 +15,7 @@ export function useJobStatus(jobId: string): UseJobStatusResult {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const errorCountRef = useRef(0)
 
   useEffect(() => {
     let cancelled = false
@@ -23,6 +24,7 @@ export function useJobStatus(jobId: string): UseJobStatusResult {
       try {
         const data = await getJob(jobId)
         if (!cancelled) {
+          errorCountRef.current = 0
           setJob(data)
           setError(null)
           if (TERMINAL_STATUSES.has(data.status)) {
@@ -34,7 +36,12 @@ export function useJobStatus(jobId: string): UseJobStatusResult {
         }
       } catch (err) {
         if (!cancelled) {
+          errorCountRef.current += 1
           setError(err instanceof Error ? err.message : 'Failed to fetch job')
+          if (errorCountRef.current >= 3 && intervalRef.current) {
+            clearInterval(intervalRef.current)
+            intervalRef.current = null
+          }
         }
       } finally {
         if (!cancelled) setLoading(false)
