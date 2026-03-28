@@ -1,37 +1,40 @@
-# Sprint 1 Contract: Backend Core — docling Integration + Async Job Processing
+# Sprint 2 Contract: Full API + Storage + Export Formats
 
 ## Sprint Goal
-A working FastAPI backend that accepts PDF uploads, queues async parsing jobs using docling, and stores results in SQLite.
+Complete the REST API surface, implement all three export formats (JSON, Markdown, plain text), add job listing with pagination, CORS, and DELETE endpoint.
 
 ## Implementation Goals
-1. Project scaffold with all dependencies configured
-2. SQLAlchemy models for Job and ParsedResult
-3. FastAPI app with upload and health endpoints
-4. docling-based parser service supporting Korean (EasyOCR pipeline)
-5. BackgroundTasks integration for async job lifecycle management
-6. File storage structure: `uploads/{job_id}/input.pdf` and `uploads/{job_id}/images/`
+1. `GET /api/jobs` with pagination (`?page`, `?limit`)
+2. `GET /api/jobs/{job_id}/result` returns full structured result JSON
+3. `services/exporter.py` with `to_json()`, `to_markdown()`, `to_text()`
+4. Export generation triggered after parsing; paths saved to `ParsedResult`
+5. Download endpoints: `GET /api/jobs/{job_id}/download/{json|markdown|text}`
+6. `DELETE /api/jobs/{job_id}` — removes DB rows + filesystem
+7. Error handling: 404 on missing jobs, 400 on non-PDF, 500 structured error
+8. CORS middleware (already done in Sprint 1, verify it's correct)
 
 ## Testable Success Criteria
-- [ ] `POST /api/upload` accepts a PDF file and returns `{job_id, filename, status: "pending", created_at}`
-- [ ] `GET /api/jobs/{job_id}` returns job metadata with current status
-- [ ] `GET /health` returns `{"status": "ok"}`
-- [ ] Background task transitions job from pending → running → completed (or failed with error_message)
-- [ ] `parsed_results` table row exists with `result_json` after successful parse
-- [ ] `pytest tests/unit/test_parser.py` passes (mocked docling)
-- [ ] `pytest tests/integration/test_api.py` passes (upload + status check)
+- [ ] `GET /api/jobs` returns `{total, page, limit, items}` with correct counts
+- [ ] `GET /api/jobs/{job_id}/result` returns the internal result schema JSON
+- [ ] `GET /api/jobs/{job_id}/download/json` returns JSON file (Content-Disposition: attachment)
+- [ ] `GET /api/jobs/{job_id}/download/markdown` returns .md file
+- [ ] `GET /api/jobs/{job_id}/download/text` returns .txt file
+- [ ] Markdown output uses GFM table syntax for PDFs containing tables
+- [ ] `DELETE /api/jobs/{job_id}` removes DB rows AND `uploads/{job_id}/` directory
+- [ ] All three download endpoints return 404 for non-existent jobs
+- [ ] All three download endpoints return 404 if result not ready (pending/running)
+- [ ] `pytest tests/integration/test_api.py` covers all new endpoints
 
 ## Out-of-Scope for This Sprint
-- Export format generation (JSON/MD/TXT files) — Sprint 2
 - Frontend UI — Sprint 3
-- Job listing/pagination — Sprint 2
-- Download endpoints — Sprint 2
-- DELETE endpoint — Sprint 2
+- Real docling parsing (tests use mocked parser)
+- Celery/Redis job queuing
 
 ## Technical Decisions
-- Use `uuid.uuid4()` for job IDs (string stored in SQLite)
-- Store files at `uploads/{job_id}/input.pdf` relative to backend working directory
-- Use `python-dotenv` for config; `UPLOAD_DIR` and `DATABASE_URL` from `.env`
-- SQLite WAL mode enabled on startup
-- docling `DocumentConverter` with EasyOCR pipeline for Korean support
-- Internal result schema: `{pages: [{page_number, elements: [{type, content, bbox, language?}]}], metadata: {total_pages, languages, has_tables, has_images}}`
-- parser.py detects languages from element content using langdetect or heuristic
+- Export files generated in background task (after parse_pdf succeeds)
+- Exporter called from `_run_parse_job` in upload.py after parse succeeds
+- Markdown tables use GFM syntax: `| col | col |\n|---|---|\n| val | val |`
+- Text export: join all element content with newlines, preserving page breaks
+- File paths saved to `ParsedResult.json_path`, `markdown_path`, `text_path`
+- `DELETE` uses `shutil.rmtree` for filesystem cleanup
+- Results endpoint returns 404 if job not found, 202 if job still pending/running

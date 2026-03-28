@@ -45,6 +45,10 @@ def _run_parse_job(job_id: str, file_path: Path, image_dir: Path) -> None:
 
         result = parse_pdf(file_path, image_dir)
 
+        from src.backend.services.exporter import generate_all_exports
+        job_dir = file_path.parent
+        export_paths = generate_all_exports(result, job_dir)
+
         job.status = "completed"
         job.page_count = result["metadata"]["total_pages"]
         job.languages_detected = json.dumps(result["metadata"]["languages"])
@@ -54,6 +58,9 @@ def _run_parse_job(job_id: str, file_path: Path, image_dir: Path) -> None:
             job_id=job_id,
             result_json=json.dumps(result),
             image_dir=str(image_dir),
+            json_path=export_paths["json_path"],
+            markdown_path=export_paths["markdown_path"],
+            text_path=export_paths["text_path"],
         )
         db.add(parsed)
         db.commit()

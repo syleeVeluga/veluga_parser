@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.backend.database import create_tables
 from src.backend.routes.upload import router as upload_router
 from src.backend.routes.jobs import router as jobs_router
+from src.backend.routes.results import router as results_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -38,3 +39,4 @@ def health():
 
 app.include_router(upload_router, prefix="/api")
 app.include_router(jobs_router, prefix="/api")
+app.include_router(results_router, prefix="/api")
