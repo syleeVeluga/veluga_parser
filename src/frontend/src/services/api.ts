@@ -98,3 +98,7 @@ export function getDownloadUrl(jobId: string, format: 'json' | 'markdown' | 'tex
 export function getImageUrl(jobId: string, filename: string): string {
   return `/api/jobs/${jobId}/images/${encodeURIComponent(filename)}`
 }
+
+export function getPdfUrl(jobId: string): string {
+  return `/api/jobs/${jobId}/pdf`
+}

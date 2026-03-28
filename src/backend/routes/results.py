@@ -2,6 +2,7 @@
 GET /api/jobs/{job_id}/result — full structured result JSON
 GET /api/jobs/{job_id}/download/{format} — file downloads
 GET /api/jobs/{job_id}/images/{filename} — serve extracted image files
+GET /api/jobs/{job_id}/pdf — serve the original uploaded PDF
 DELETE /api/jobs/{job_id} — delete job and files
 """
 import json
@@ -97,6 +98,19 @@ def download_text(job_id: str, db: Session = Depends(get_db)):
         media_type="text/plain",
         filename=f"{job_id}_result.txt",
     )
+
+
+@router.get("/jobs/{job_id}/pdf")
+def get_pdf(job_id: str, db: Session = Depends(get_db)):
+    job = _get_job_or_404(job_id, db)
+    if job.status != "completed":
+        raise HTTPException(status_code=404, detail="PDF not available until job is completed")
+    if not job.file_path:
+        raise HTTPException(status_code=404, detail="PDF file path not recorded")
+    pdf_path = Path(job.file_path)
+    if not pdf_path.exists():
+        raise HTTPException(status_code=404, detail="PDF file not found on disk")
+    return FileResponse(path=str(pdf_path), media_type="application/pdf", filename=job.filename)
 
 
 @router.get("/jobs/{job_id}/images/{filename}")
