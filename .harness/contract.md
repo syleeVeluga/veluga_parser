@@ -1,40 +1,41 @@
-# Sprint 2 Contract: Full API + Storage + Export Formats
+# Sprint 3 Contract: Frontend Web UI
 
 ## Sprint Goal
-Complete the REST API surface, implement all three export formats (JSON, Markdown, plain text), add job listing with pagination, CORS, and DELETE endpoint.
+React 18 + Vite + TailwindCSS frontend with PDF upload, job list, real-time status polling, results viewer, and download buttons. FastAPI serves the built frontend as static files.
 
 ## Implementation Goals
-1. `GET /api/jobs` with pagination (`?page`, `?limit`)
-2. `GET /api/jobs/{job_id}/result` returns full structured result JSON
-3. `services/exporter.py` with `to_json()`, `to_markdown()`, `to_text()`
-4. Export generation triggered after parsing; paths saved to `ParsedResult`
-5. Download endpoints: `GET /api/jobs/{job_id}/download/{json|markdown|text}`
-6. `DELETE /api/jobs/{job_id}` — removes DB rows + filesystem
-7. Error handling: 404 on missing jobs, 400 on non-PDF, 500 structured error
-8. CORS middleware (already done in Sprint 1, verify it's correct)
+1. Vite + React 18 + TailwindCSS + React Router v6 scaffold in `src/frontend/`
+2. `services/api.ts` — typed fetch wrappers for all backend endpoints
+3. `HomePage` (`/`) — UploadZone + JobList with auto-refresh
+4. `JobDetailPage` (`/jobs/:id`) — polling, status badge, metadata, DownloadButtons, ResultsViewer
+5. `useUpload` hook — upload state machine (idle/uploading/error)
+6. `useJobStatus` hook — polling with cleanup on unmount
+7. `JobStatusBadge` component — color-coded status
+8. FastAPI `StaticFiles` mount for production frontend serving
+9. `npm run build` succeeds with no TypeScript errors
 
 ## Testable Success Criteria
-- [ ] `GET /api/jobs` returns `{total, page, limit, items}` with correct counts
-- [ ] `GET /api/jobs/{job_id}/result` returns the internal result schema JSON
-- [ ] `GET /api/jobs/{job_id}/download/json` returns JSON file (Content-Disposition: attachment)
-- [ ] `GET /api/jobs/{job_id}/download/markdown` returns .md file
-- [ ] `GET /api/jobs/{job_id}/download/text` returns .txt file
-- [ ] Markdown output uses GFM table syntax for PDFs containing tables
-- [ ] `DELETE /api/jobs/{job_id}` removes DB rows AND `uploads/{job_id}/` directory
-- [ ] All three download endpoints return 404 for non-existent jobs
-- [ ] All three download endpoints return 404 if result not ready (pending/running)
-- [ ] `pytest tests/integration/test_api.py` covers all new endpoints
+- [ ] `npm run build` in `src/frontend/` succeeds (exit code 0, no TS errors)
+- [ ] `npm run lint` passes (no ESLint errors)
+- [ ] HomePage renders UploadZone and JobList
+- [ ] UploadZone validates PDF MIME type client-side and rejects non-PDF
+- [ ] JobList shows job status badges with correct color per status
+- [ ] JobDetailPage polls `GET /api/jobs/:id` every 2 seconds while pending/running
+- [ ] DownloadButtons are disabled until status=completed
+- [ ] ResultsViewer renders text elements and tables from result JSON
+- [ ] FastAPI serves frontend from `src/frontend/dist/` at root `/`
+- [ ] No TypeScript `any` types used (per CLAUDE.md convention)
 
 ## Out-of-Scope for This Sprint
-- Frontend UI — Sprint 3
-- Real docling parsing (tests use mocked parser)
-- Celery/Redis job queuing
+- Playwright E2E tests (heavy setup, nice-to-have)
+- Drag-and-drop (nice-to-have)
+- Search within results (nice-to-have)
 
 ## Technical Decisions
-- Export files generated in background task (after parse_pdf succeeds)
-- Exporter called from `_run_parse_job` in upload.py after parse succeeds
-- Markdown tables use GFM syntax: `| col | col |\n|---|---|\n| val | val |`
-- Text export: join all element content with newlines, preserving page breaks
-- File paths saved to `ParsedResult.json_path`, `markdown_path`, `text_path`
-- `DELETE` uses `shutil.rmtree` for filesystem cleanup
-- Results endpoint returns 404 if job not found, 202 if job still pending/running
+- TailwindCSS v3 (stable, well-supported with Vite)
+- React Router v6 with `createBrowserRouter`
+- Native `fetch` API (no axios)
+- Poll interval: 2 seconds for job detail, 5 seconds for job list
+- Backend API base URL: `http://localhost:8000` in dev (proxied via Vite), relative in prod
+- TypeScript strict mode enabled
+- File structure: components/, pages/, hooks/, services/ under `src/frontend/src/`

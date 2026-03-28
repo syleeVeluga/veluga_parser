@@ -3,9 +3,11 @@ Veluga PDF Parser — FastAPI application entry point.
 """
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from src.backend.database import create_tables
 from src.backend.routes.upload import router as upload_router
@@ -40,3 +42,8 @@ def health():
 app.include_router(upload_router, prefix="/api")
 app.include_router(jobs_router, prefix="/api")
 app.include_router(results_router, prefix="/api")
+
+# Serve React frontend in production (if dist/ exists)
+_frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
+if _frontend_dist.exists():
+    app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="frontend")
