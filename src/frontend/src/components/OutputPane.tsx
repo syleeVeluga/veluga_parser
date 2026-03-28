@@ -24,7 +24,7 @@ export function OutputPane({ jobId, filename }: OutputPaneProps) {
   return (
     <div className="h-full flex flex-col bg-white">
       {/* Tab bar */}
-      <div className="flex border-b border-gray-200 flex-shrink-0">
+      <div className="flex border-b border-gray-200 shrink-0">
         {TABS.map(tab => (
           <button
             key={tab.id}

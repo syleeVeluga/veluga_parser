@@ -198,7 +198,7 @@ export function ResultsViewer({ jobId, filename, status }: ResultsViewerProps) {
 
       <div className="flex gap-4">
         {/* Page sidebar */}
-        <div className="w-36 flex-shrink-0">
+        <div className="w-36 shrink-0">
           <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Pages</h3>
           <ul className="space-y-1">
             {result.pages.map(p => (
