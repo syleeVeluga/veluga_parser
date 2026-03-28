@@ -31,11 +31,17 @@ export function JobList() {
 
   useEffect(() => {
     fetchJobs(page)
-    const hasActive = items.some(j => j.status === 'pending' || j.status === 'running')
-    if (!hasActive) return
-    const timer = setInterval(() => fetchJobs(page), REFRESH_INTERVAL_MS)
+    // Always set up the interval; fetchJobs will re-evaluate active state each tick
+    const timer = setInterval(async () => {
+      const data = await listJobs(page, 10).catch(() => null)
+      if (!data) return
+      setItems(data.items)
+      setTotal(data.total)
+      const hasActive = data.items.some(j => j.status === 'pending' || j.status === 'running')
+      if (!hasActive) clearInterval(timer)
+    }, REFRESH_INTERVAL_MS)
     return () => clearInterval(timer)
-  }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page])
 
   if (loading) return <p className="text-gray-500 text-sm">Loading jobs...</p>
   if (error) return <p className="text-red-600 text-sm">{error}</p>
