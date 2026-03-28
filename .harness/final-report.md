@@ -1,46 +1,67 @@
-# Final Report: Output Viewer Enhancement (Sprint 4)
+# Final Report: Split-Pane Comparison Viewer (Sprint 5)
 
 **Date:** 2026-03-29
-**Sprint:** 4
-**Result:** PASS (92.75/100)
+**Sprint:** 5
+**Result:** PASS (18/18 criteria)
 
 ## Implemented Features
 
 ### Backend
-- `GET /api/jobs/{job_id}/images/{filename}` — serves extracted image files from `uploads/{job_id}/images/` with path traversal protection and 404 handling
+- `GET /api/jobs/{job_id}/pdf` — serves the original uploaded PDF via `FileResponse(media_type="application/pdf")`. Validates job existence, completed status, and file presence on disk.
 
-### Frontend — `ResultsViewer.tsx`
-- **`ViewerMetadataPanel`** — shows document filename, total pages, status badge (color-coded), detected languages, "Tables" and "Images" tags when present
-- **`ImageElement`** — renders actual `<img>` tags pointing to the new image endpoint, with fallback to placeholder icon on error
-- **`PageNavigationControls`** — Prev/Next buttons plus "Page X of N" label; buttons disabled at first/last page
-- **Scroll-to-top** — content area scrolls to top when switching pages
-- **Element-count hints** — sidebar shows "N items" per page below the page number
-- **Key prop fixes** — `TableElement` uses content-based keys instead of array indices
+### Frontend — New Components
 
-### Bug Fixes
-- `UploadZone.tsx`: replaced `alert()` with inline `validationError` state rendered in the existing error paragraph
-- `useJobStatus.ts`: consecutive error counter stops polling after 3 failures
+**`SplitPaneViewer.tsx`**
+- `react-split` drag-resizable layout; `minSize={300}`, `sizes=[50,50]`, `gutterSize=8`
+- Full-height flex layout fills viewport below header/metadata bar
+
+**`PdfPane.tsx`**
+- `<iframe src={getPdfUrl(jobId)}>` for inline PDF rendering
+- Fallback text for browsers without a built-in PDF viewer
+
+**`OutputPane.tsx`**
+- Tab bar: Markdown | JSON | Text | Structured
+- Tab state is local `useState`, preserved across divider drags
+- Each tab content area has independent `overflow-y-auto` scroll
+
+**`tabs/MarkdownTab.tsx`**
+- Fetches `/api/jobs/{jobId}/download/markdown` as text
+- Renders with `react-markdown` + `remark-gfm` for tables/GFM
+- Custom component overrides for all HTML elements (h1–h3, p, ul, table, code, etc.)
+
+**`tabs/JsonTab.tsx`**
+- Calls `getResult(jobId)` → `JSON.stringify` with 2-space indent
+- Syntax-highlighted with `react-syntax-highlighter` (atomOneDark theme, line numbers)
+
+**`tabs/PlainTextTab.tsx`**
+- Fetches `/api/jobs/{jobId}/download/text` as text
+- Renders in `<pre className="whitespace-pre-wrap font-mono">`
+
+**`tabs/StructuredTab.tsx`**
+- Thin wrapper around existing `ResultsViewer` (page-by-page viewer from Sprint 4)
 
 ### Supporting Changes
-- `api.ts`: added `getImageUrl(jobId, filename)` helper with `encodeURIComponent`
-- `JobDetailPage.tsx`: passes `filename` and `status` props to `<ResultsViewer>`
+- `api.ts`: `getPdfUrl(jobId)` helper
+- `JobDetailPage.tsx`: refactored to full-height flex; renders `<SplitPaneViewer>` for completed jobs
+- npm deps added: `react-split`, `react-markdown`, `remark-gfm`, `react-syntax-highlighter`, `@types/react-syntax-highlighter`
 
 ## Test Results
-
 - `pytest`: 42/42 passed
-- `npm run build`: 0 TypeScript errors, 41 modules transformed
+- `npm run build`: 0 TypeScript errors, 1173 modules transformed
 
 ## Known Limitations
-
-- Image lightbox/modal not implemented (out of scope)
-- Filter toggles for element types not implemented (out of scope)
-- Frontend unit tests not added (out of scope)
+- PDF/structured viewer page sync not implemented (out of scope)
+- No mobile/responsive fallback for split pane (desktop-only)
+- Split ratio not persisted across page refreshes
 
 ## Files Changed
-
 - `src/backend/routes/results.py`
 - `src/frontend/src/services/api.ts`
-- `src/frontend/src/components/ResultsViewer.tsx`
 - `src/frontend/src/pages/JobDetailPage.tsx`
-- `src/frontend/src/components/UploadZone.tsx`
-- `src/frontend/src/hooks/useJobStatus.ts`
+- `src/frontend/src/components/SplitPaneViewer.tsx` (new)
+- `src/frontend/src/components/PdfPane.tsx` (new)
+- `src/frontend/src/components/OutputPane.tsx` (new)
+- `src/frontend/src/components/tabs/MarkdownTab.tsx` (new)
+- `src/frontend/src/components/tabs/JsonTab.tsx` (new)
+- `src/frontend/src/components/tabs/PlainTextTab.tsx` (new)
+- `src/frontend/src/components/tabs/StructuredTab.tsx` (new)
