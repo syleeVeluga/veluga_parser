@@ -133,9 +133,9 @@ function MarkdownRenderer({ content }: { content: string }) {
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
-        h1: ({ children }) => <h1 className="text-2xl font-bold mt-4 mb-2 text-gray-900">{children}</h1>,
-        h2: ({ children }) => <h2 className="text-xl font-bold mt-4 mb-2 text-gray-900">{children}</h2>,
-        h3: ({ children }) => <h3 className="text-lg font-semibold mt-3 mb-1 text-gray-900">{children}</h3>,
+        h1: ({ children }) => <h1 className="text-4xl font-bold mt-6 mb-3 text-gray-900">{children}</h1>,
+        h2: ({ children }) => <h2 className="text-2xl font-bold mt-5 mb-2 text-gray-900">{children}</h2>,
+        h3: ({ children }) => <h3 className="text-xl font-semibold mt-4 mb-2 text-gray-900">{children}</h3>,
         p: ({ children }) => <p className="mb-3 leading-relaxed">{children}</p>,
         ul: ({ children }) => <ul className="list-disc list-inside mb-3 space-y-1">{children}</ul>,
         ol: ({ children }) => <ol className="list-decimal list-inside mb-3 space-y-1">{children}</ol>,
