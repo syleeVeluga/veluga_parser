@@ -6,11 +6,9 @@ GET /api/jobs/{job_id}/elements — flat element list with filters
 GET /api/jobs/{job_id}/download/{format} — file downloads
 GET /api/jobs/{job_id}/images/{filename} — serve extracted image files
 GET /api/jobs/{job_id}/pdf — serve the original uploaded PDF
-DELETE /api/jobs/{job_id} — delete job and files
 """
 import json
 import mimetypes
-import shutil
 from pathlib import Path
 from typing import Optional
 
@@ -26,7 +24,7 @@ router = APIRouter()
 
 
 def _get_job_or_404(job_id: str, db: Session) -> Job:
-    job = db.query(Job).filter(Job.id == job_id).first()
+    job = db.query(Job).filter(Job.id == job_id, Job.deleted_at.is_(None)).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
@@ -241,24 +239,3 @@ def download_chunks(job_id: str, db: Session = Depends(get_db)):
     raise HTTPException(status_code=404, detail="Chunks export file not found")
 
 
-@router.delete("/jobs/{job_id}")
-def delete_job(job_id: str, db: Session = Depends(get_db)):
-    job = _get_job_or_404(job_id, db)
-
-    if job.status == "running":
-        raise HTTPException(status_code=409, detail="Cannot delete a job that is currently running")
-
-    # Delete filesystem artifacts
-    if job.file_path:
-        job_dir = Path(job.file_path).parent
-        if job_dir.exists():
-            shutil.rmtree(job_dir, ignore_errors=True)
-
-    # Delete DB rows (result first due to FK)
-    parsed = db.query(ParsedResult).filter(ParsedResult.job_id == job_id).first()
-    if parsed:
-        db.delete(parsed)
-    db.delete(job)
-    db.commit()
-
-    return {"detail": "Job deleted", "job_id": job_id}

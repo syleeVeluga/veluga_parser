@@ -84,7 +84,6 @@ export function ChunksTab({ jobId }: ChunksTabProps) {
       .then(data => {
         const all = data.chunks as Record<Strategy, Chunk[]>
         setAllChunks(all)
-        setChunks(all[strategy] ?? [])
         setError(null)
       })
       .catch(err => setError(err instanceof Error ? err.message : 'Failed to load chunks'))
