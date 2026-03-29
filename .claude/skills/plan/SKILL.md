@@ -95,3 +95,17 @@ Write to `.harness/spec.md` with the following structure:
 - **Explore AI integration opportunities**: Identify points where AI can enhance UX
 - **Set realistic scope**: Achievable plans over overly ambitious ones
 - The spec must be **concrete enough** for the Generator to start implementing immediately
+
+## Design Direction (critical for Evaluator scoring)
+Include a design direction section in the spec. The Evaluator heavily weights
+Design Quality (20%) and Originality (15%), so vague design specs lead to generic output.
+
+Specify in the spec:
+- **Mood / Identity**: What feeling should the UI convey? (e.g., "minimal and calm" vs "bold and energetic")
+- **Color direction**: Warm or cool? Muted or vibrant? Light or dark base?
+- **Reference style**: Name a recognizable style direction (e.g., "Linear-style minimalism", "Notion-like warmth", "Stripe-level polish")
+- **Anti-patterns to avoid**: Explicitly state "No purple gradients over white cards, no generic hero sections, no unmodified component library defaults"
+- **Key UX moments**: Which interactions should feel especially polished? (e.g., onboarding flow, empty states, loading transitions)
+
+⚠️ Avoid language like "museum quality" — per the blog, specific quality phrases cause
+visual convergence. Instead, describe the **specific mood and identity** you want.

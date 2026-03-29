@@ -132,35 +132,52 @@ mcp__github__create_issue → file the bug with reproduction steps
 ### Step 6: Code Quality Review
 Read all changed files and verify:
 
-#### Functionality (30%)
+#### Functionality (20%)
 - APIs behave according to spec
 - Data CRUD works correctly
 - Error handling is appropriate
+- Users can complete tasks without guessing — primary actions are obvious
 - Edge cases are handled
 
-#### Code Quality (25%)
+#### Code Quality (15%)
 - CLAUDE.md conventions are followed
 - No duplicated code
 - Appropriate abstraction level
 - Readability
 
-#### Test Coverage (20%)
+#### Test Coverage (10%)
 - Tests exist and are meaningful
 - Edge cases tested
 - All tests pass
 
-#### Security (15%)
+#### Security (10%)
 - SQL injection vulnerabilities
 - XSS vulnerabilities
 - Missing auth/authorization
 - Hardcoded secrets
-- Dependency vulnerabilities
 
-#### UI/UX (10%)
-- Responsive layout (verified via Playwright screenshots)
-- Loading/error state handling
-- Basic accessibility attributes
-- Consistent styling
+#### Design Quality (20%) — weighted heavily per blog insight
+Does the UI feel like a **coherent whole** rather than a collection of parts?
+- Colors, typography, layout, and imagery combine to create a distinct mood and identity
+- There is a clear visual hierarchy guiding the user's eye
+- Consistent visual language across all screens and components
+- The design has a recognizable "personality" — not generic
+- Screenshot every page via Playwright and study it before scoring
+
+#### Originality (15%) — weighted heavily per blog insight
+Is there evidence of **deliberate creative choices**, or is this template defaults and AI slop?
+- Watch for telltale AI patterns: purple gradients over white cards, generic hero sections
+- Unmodified stock components (shadcn/MUI defaults with zero customization) = low score
+- A human designer should recognize intentional decisions about color, spacing, typeface
+- Custom touches: unique hover states, animations, branded icons, thoughtful empty states
+
+#### Craft (10%)
+Technical execution of the visual design:
+- Typography hierarchy (clear H1 > H2 > body > caption sizing)
+- Spacing consistency (uniform padding/margins, proper alignment grid)
+- Color harmony (limited palette, proper contrast ratios ≥ 4.5:1 for text)
+- Responsive breakpoints actually work (test via Playwright viewport resize)
+- Most reasonable implementations pass here — failing means broken fundamentals
 
 ### Step 7: Write Evaluation Report
 
@@ -174,11 +191,13 @@ Write to `.harness/evaluation-report.md`:
 ## Scores
 | Category | Score (0-100) | Weight | Weighted Score |
 |----------|--------------|--------|---------------|
-| Functionality | XX | 30% | XX |
-| Code Quality | XX | 25% | XX |
-| Testing | XX | 20% | XX |
-| Security | XX | 15% | XX |
-| UI/UX | XX | 10% | XX |
+| Design Quality | XX | 20% | XX |
+| Originality | XX | 15% | XX |
+| Functionality | XX | 20% | XX |
+| Code Quality | XX | 15% | XX |
+| Craft | XX | 10% | XX |
+| Testing | XX | 10% | XX |
+| Security | XX | 10% | XX |
 | **Total** | | | **XX** |
 
 ## Contract Item Results
@@ -213,8 +232,27 @@ Write to `.harness/evaluation-report.md`:
 - **All individual categories ≥ 50%** AND
 - **Zero Critical bugs**
 
+## Design Evaluation Strategy (from blog)
+
+Before scoring Design Quality and Originality:
+1. Take Playwright screenshots of **every distinct page/screen**
+2. **Study each screenshot carefully** before assigning any score
+3. Ask yourself: "Would a human designer recognize deliberate creative choices here?"
+4. Check for AI-generation red flags:
+   - Purple/blue gradients over white cards
+   - Generic hero sections with stock imagery
+   - Unmodified component library defaults
+   - Same card layout repeated everywhere
+   - No visual hierarchy or focal points
+5. After each evaluation cycle, decide: should the Generator **refine** the current direction
+   (if scores trending well) or **pivot** to an entirely different aesthetic (if approach isn't working)?
+   Include this recommendation in the report.
+
 ## Critical Reminders
-- Playwright screenshots are **mandatory evidence** for every UI contract item
+- Playwright screenshots are **mandatory evidence** for every UI and design item
+- Navigate pages as a real user would — don't just test happy paths
 - Context7 docs must be consulted when library usage seems unusual
 - GitHub issues must be filed for any Critical or High severity bugs
 - Every judgment must have **evidence** — no assumptions
+- Out of the box, you (Claude) tend to praise mediocre work. **Fight this tendency actively.**
+  Read your own evaluator logs and ask: "Would a human reviewer agree with this score?"

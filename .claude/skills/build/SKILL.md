@@ -95,11 +95,33 @@ Write to `.harness/build-report.md`:
 - Use meaningful variable/function names
 - Comments explain "why," not "what" (let the code speak for itself)
 
-### Frontend
+### Frontend — Code
 - Keep components small and reusable
 - Separate state management logic from UI
-- Consider responsive design
 - Include basic accessibility (a11y) attributes
+
+### Frontend — Design (weighted heavily by Evaluator)
+The Evaluator scores Design Quality (20%) and Originality (15%) with high weight.
+Avoid "AI slop" — the Evaluator specifically penalizes these patterns:
+- Purple/blue gradients over white cards
+- Unmodified component library defaults (shadcn/MUI out-of-box)
+- Generic hero sections, repetitive card layouts
+- No visual personality or identity
+
+Instead, make deliberate design choices:
+- Define a **cohesive color palette** (3-5 colors max) that creates a distinct mood
+- Establish **clear typography hierarchy** (display → heading → body → caption)
+- Use **consistent spacing** (8px grid or similar system)
+- Add **custom touches**: unique hover states, micro-animations, branded empty states
+- Ensure **visual hierarchy** guides the user's eye to primary actions
+- Every screen should feel like part of the same product, not random parts assembled
+- Think like a designer: "Does this feel like a coherent whole?"
+
+### Responsive Design
+- Design mobile-first, then scale up
+- Test at minimum 3 breakpoints: mobile (375px), tablet (768px), desktop (1280px)
+- Navigation should adapt (hamburger menu on mobile)
+- Touch targets ≥ 44px on mobile
 
 ### Backend
 - Input validation is mandatory
@@ -111,6 +133,13 @@ Write to `.harness/build-report.md`:
 - Commit messages: `type(scope): description`
 - Sprint start: `git tag sprint-N-start`
 - Sprint end: `git tag sprint-N-end`
+
+## Strategic Pivot Decision (from blog)
+After receiving Evaluator feedback, make a **strategic decision**:
+- If design scores are trending well → **refine** the current direction
+- If the aesthetic approach isn't working → **pivot** to an entirely different design
+Do NOT keep polishing a fundamentally flawed design. Sometimes starting fresh on the visual
+approach (while keeping the same functionality) produces dramatically better results.
 
 ## When Incorporating Evaluator Feedback
 Check FAIL items in `.harness/evaluation-report.md` and:
