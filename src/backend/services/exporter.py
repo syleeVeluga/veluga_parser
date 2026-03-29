@@ -108,18 +108,29 @@ def to_text(result: dict, output_path: Path) -> Path:
     return output_path
 
 
+def to_chunks_json(result: dict, output_path: Path) -> Path:
+    """Write the chunks dict to a standalone JSON file. Returns output_path."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    chunks = result.get("chunks", {})
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(chunks, f, ensure_ascii=False, indent=2)
+    return output_path
+
+
 def generate_all_exports(result: dict, job_dir: Path) -> dict:
     """
-    Generate all three export files and return a dict with paths.
+    Generate all export files and return a dict with paths.
 
     Returns:
-        {"json_path": str, "markdown_path": str, "text_path": str}
+        {"json_path": str, "markdown_path": str, "text_path": str, "chunks_path": str}
     """
     json_path = to_json(result, job_dir / "result.json")
     md_path = to_markdown(result, job_dir / "result.md")
     txt_path = to_text(result, job_dir / "result.txt")
+    chunks_path = to_chunks_json(result, job_dir / "chunks.json")
     return {
         "json_path": str(json_path),
         "markdown_path": str(md_path),
         "text_path": str(txt_path),
+        "chunks_path": str(chunks_path),
     }

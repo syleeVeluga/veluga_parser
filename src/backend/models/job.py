@@ -20,6 +20,11 @@ class Job(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     languages_detected: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array string
+    doc_title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    element_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    chunk_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    has_equations: Mapped[bool | None] = mapped_column(nullable=True, default=False)
+    has_code: Mapped[bool | None] = mapped_column(nullable=True, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)

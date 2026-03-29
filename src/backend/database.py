@@ -31,13 +31,32 @@ def get_db():
         db.close()
 
 
+_JOB_MIGRATIONS = [
+    "ALTER TABLE jobs ADD COLUMN deleted_at DATETIME",
+    "ALTER TABLE jobs ADD COLUMN doc_title TEXT",
+    "ALTER TABLE jobs ADD COLUMN element_count INTEGER",
+    "ALTER TABLE jobs ADD COLUMN chunk_count INTEGER",
+    "ALTER TABLE jobs ADD COLUMN has_equations BOOLEAN DEFAULT 0",
+    "ALTER TABLE jobs ADD COLUMN has_code BOOLEAN DEFAULT 0",
+]
+
+_RESULT_MIGRATIONS = [
+    "ALTER TABLE parsed_results ADD COLUMN schema_version TEXT DEFAULT '1.0'",
+    "ALTER TABLE parsed_results ADD COLUMN chunks_json TEXT",
+    "ALTER TABLE parsed_results ADD COLUMN toc_json TEXT",
+    "ALTER TABLE parsed_results ADD COLUMN element_count INTEGER",
+    "ALTER TABLE parsed_results ADD COLUMN chunks_path TEXT",
+]
+
+
 def create_tables():
     from src.backend.models import job, result  # noqa: F401 — register models
     Base.metadata.create_all(bind=engine)
-    # Migrate: add deleted_at column if not present (idempotent)
+    # Idempotent migrations for all new columns
     with engine.connect() as conn:
-        try:
-            conn.execute(text("ALTER TABLE jobs ADD COLUMN deleted_at DATETIME"))
-            conn.commit()
-        except Exception:
-            pass  # Column already exists
+        for stmt in _JOB_MIGRATIONS + _RESULT_MIGRATIONS:
+            try:
+                conn.execute(text(stmt))
+                conn.commit()
+            except Exception:
+                pass  # Column already exists

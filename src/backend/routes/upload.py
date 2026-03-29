@@ -45,22 +45,37 @@ def _run_parse_job(job_id: str, file_path: Path, image_dir: Path) -> None:
 
         result = parse_pdf(file_path, image_dir)
 
+        from src.backend.services.chunker import chunk_document
+        result = chunk_document(result)
+
         from src.backend.services.exporter import generate_all_exports
         job_dir = file_path.parent
         export_paths = generate_all_exports(result, job_dir)
 
+        meta = result.get("metadata", {})
+        chunks = result.get("chunks", {})
         job.status = "completed"
-        job.page_count = result["metadata"]["total_pages"]
-        job.languages_detected = json.dumps(result["metadata"]["languages"])
+        job.page_count = meta.get("total_pages", 0)
+        job.languages_detected = json.dumps(meta.get("languages", []))
+        job.doc_title = meta.get("title")
+        job.element_count = len(result.get("elements", []))
+        job.chunk_count = sum(len(v) for v in chunks.values())
+        job.has_equations = bool(meta.get("has_equations", False))
+        job.has_code = bool(meta.get("has_code", False))
         db.commit()
 
         parsed = ParsedResult(
             job_id=job_id,
+            schema_version=result.get("schema_version", "2.0"),
             result_json=json.dumps(result),
+            chunks_json=json.dumps(chunks),
+            toc_json=json.dumps(result.get("toc", [])),
+            element_count=len(result.get("elements", [])),
             image_dir=str(image_dir),
             json_path=export_paths["json_path"],
             markdown_path=export_paths["markdown_path"],
             text_path=export_paths["text_path"],
+            chunks_path=export_paths.get("chunks_path"),
         )
         db.add(parsed)
         db.commit()

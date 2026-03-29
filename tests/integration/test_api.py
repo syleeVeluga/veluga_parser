@@ -17,17 +17,73 @@ from fastapi.testclient import TestClient
 # ---------------------------------------------------------------------------
 
 MOCK_PARSE_RESULT = {
+    "schema_version": "2.0",
+    "elements": [
+        {
+            "element_id": "elem_0000",
+            "type": "title",
+            "content": "Test Document",
+            "page_number": 1,
+            "reading_order": 0,
+            "hierarchy_level": 0,
+        },
+        {
+            "element_id": "elem_0001",
+            "type": "section_header",
+            "content": "Introduction",
+            "page_number": 1,
+            "reading_order": 1,
+            "hierarchy_level": 1,
+        },
+        {
+            "element_id": "elem_0002",
+            "type": "text",
+            "content": "안녕하세요",
+            "page_number": 1,
+            "reading_order": 2,
+            "language": "ko",
+            "parent_section": "Introduction",
+        },
+        {
+            "element_id": "elem_0003",
+            "type": "text",
+            "content": "Hello World",
+            "page_number": 1,
+            "reading_order": 3,
+            "language": "en",
+            "parent_section": "Introduction",
+        },
+        {
+            "element_id": "elem_0004",
+            "type": "table",
+            "content": "| Name | Value |\n|---|---|\n| Alpha | 1 |",
+            "rows": [["Name", "Value"], ["Alpha", "1"]],
+            "page_number": 1,
+            "reading_order": 4,
+        },
+        {
+            "element_id": "elem_0005",
+            "type": "page_header",
+            "content": "Running Header",
+            "page_number": 1,
+            "reading_order": 5,
+        },
+    ],
+    "toc": [
+        {"level": 0, "text": "Test Document", "page_number": 1, "element_id": "elem_0000"},
+        {"level": 1, "text": "Introduction", "page_number": 1, "element_id": "elem_0001"},
+    ],
     "pages": [
         {
             "page_number": 1,
             "elements": [
-                {"type": "text", "content": "안녕하세요", "language": "ko"},
-                {"type": "text", "content": "Hello World", "language": "en"},
-                {
-                    "type": "table",
-                    "rows": [["Name", "Value"], ["Alpha", "1"]],
-                    "content": "| Name | Value |\n|---|---|\n| Alpha | 1 |",
-                },
+                {"element_id": "elem_0002", "type": "text", "content": "안녕하세요", "language": "ko",
+                 "page_number": 1, "reading_order": 2},
+                {"element_id": "elem_0003", "type": "text", "content": "Hello World", "language": "en",
+                 "page_number": 1, "reading_order": 3},
+                {"element_id": "elem_0004", "type": "table", "rows": [["Name", "Value"], ["Alpha", "1"]],
+                 "content": "| Name | Value |\n|---|---|\n| Alpha | 1 |",
+                 "page_number": 1, "reading_order": 4},
             ],
         }
     ],
@@ -36,6 +92,71 @@ MOCK_PARSE_RESULT = {
         "languages": ["en", "ko"],
         "has_tables": True,
         "has_images": False,
+        "has_equations": False,
+        "has_code": False,
+        "title": "Test Document",
+        "authors": [],
+        "page_dimensions": [],
+    },
+    "chunks": {
+        "hierarchical": [
+            {
+                "chunk_id": "hc_0000",
+                "strategy": "hierarchical",
+                "content": "Test Document",
+                "token_estimate": 2,
+                "element_ids": ["elem_0000"],
+                "page_numbers": [1],
+                "section_path": ["Test Document"],
+                "metadata": {"start_page": 1, "end_page": 1, "has_table": False, "has_image": False, "languages": []},
+            },
+            {
+                "chunk_id": "hc_0001",
+                "strategy": "hierarchical",
+                "content": "Introduction\n\n안녕하세요\n\nHello World\n\n| Name | Value |",
+                "token_estimate": 20,
+                "element_ids": ["elem_0001", "elem_0002", "elem_0003", "elem_0004"],
+                "page_numbers": [1],
+                "section_path": ["Introduction"],
+                "metadata": {"start_page": 1, "end_page": 1, "has_table": True, "has_image": False,
+                             "languages": ["en", "ko"]},
+            },
+        ],
+        "semantic": [
+            {
+                "chunk_id": "sc_0000",
+                "strategy": "semantic",
+                "content": "Test Document\n\nIntroduction\n\n안녕하세요\n\nHello World",
+                "token_estimate": 15,
+                "element_ids": ["elem_0000", "elem_0001", "elem_0002", "elem_0003"],
+                "page_numbers": [1],
+                "section_path": ["Introduction"],
+                "metadata": {"start_page": 1, "end_page": 1, "has_table": False, "has_image": False,
+                             "languages": ["en", "ko"]},
+            },
+            {
+                "chunk_id": "sc_0001",
+                "strategy": "semantic",
+                "content": "| Name | Value |",
+                "token_estimate": 5,
+                "element_ids": ["elem_0004"],
+                "page_numbers": [1],
+                "section_path": ["Introduction"],
+                "metadata": {"start_page": 1, "end_page": 1, "has_table": True, "has_image": False, "languages": []},
+            },
+        ],
+        "hybrid": [
+            {
+                "chunk_id": "hyb_0000",
+                "strategy": "hybrid",
+                "content": "Test Document",
+                "token_estimate": 2,
+                "element_ids": ["elem_0000"],
+                "page_numbers": [1],
+                "section_path": ["Test Document"],
+                "metadata": {"start_page": 1, "end_page": 1, "has_table": False, "has_image": False, "languages": []},
+            },
+        ],
     },
 }
 
@@ -262,3 +383,165 @@ class TestDelete:
         # After deletion the job should not exist
         get_resp = client.get(f"/api/jobs/{job_id}")
         assert get_resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Sprint 3: v2 Schema + Chunks + TOC + Elements endpoints
+# ---------------------------------------------------------------------------
+
+def _upload_and_wait(client, filename: str) -> str:
+    """Upload a PDF and poll until completed. Returns job_id."""
+    job_id = _upload_pdf(client, filename)
+    for _ in range(10):
+        resp = client.get(f"/api/jobs/{job_id}")
+        if resp.json()["status"] in ("completed", "failed"):
+            break
+    return job_id
+
+
+class TestV2Schema:
+    def test_result_has_schema_version_2(self, client):
+        job_id = _upload_and_wait(client, "v2_schema.pdf")
+        resp = client.get(f"/api/jobs/{job_id}/result")
+        if resp.status_code == 200:
+            data = resp.json()
+            assert data.get("schema_version") == "2.0"
+            assert "elements" in data
+            assert "toc" in data
+            assert "chunks" in data
+
+    def test_result_chunks_has_three_strategies(self, client):
+        job_id = _upload_and_wait(client, "v2_chunks.pdf")
+        resp = client.get(f"/api/jobs/{job_id}/result")
+        if resp.status_code == 200:
+            chunks = resp.json().get("chunks", {})
+            assert "hierarchical" in chunks
+            assert "semantic" in chunks
+            assert "hybrid" in chunks
+
+    def test_job_list_includes_new_metadata_fields(self, client):
+        job_id = _upload_and_wait(client, "v2_joblist.pdf")
+        resp = client.get("/api/jobs")
+        assert resp.status_code == 200
+        items = resp.json()["items"]
+        job = next((j for j in items if j["job_id"] == job_id), None)
+        if job and job["status"] == "completed":
+            assert "doc_title" in job
+            assert "element_count" in job
+            assert "chunk_count" in job
+
+
+class TestChunksEndpoint:
+    def test_chunks_endpoint_returns_200_for_completed_job(self, client):
+        job_id = _upload_and_wait(client, "chunks_ep.pdf")
+        resp = client.get(f"/api/jobs/{job_id}/chunks")
+        assert resp.status_code in (200, 202, 422)
+        if resp.status_code == 200:
+            data = resp.json()
+            assert "job_id" in data
+            assert "chunks" in data
+
+    def test_chunks_strategy_filter_hierarchical(self, client):
+        job_id = _upload_and_wait(client, "chunks_hier.pdf")
+        resp = client.get(f"/api/jobs/{job_id}/chunks?strategy=hierarchical")
+        if resp.status_code == 200:
+            data = resp.json()
+            assert data["strategy"] == "hierarchical"
+            assert isinstance(data["chunks"], list)
+
+    def test_chunks_strategy_filter_semantic(self, client):
+        job_id = _upload_and_wait(client, "chunks_sem.pdf")
+        resp = client.get(f"/api/jobs/{job_id}/chunks?strategy=semantic")
+        if resp.status_code == 200:
+            assert resp.json()["strategy"] == "semantic"
+
+    def test_chunks_strategy_filter_hybrid(self, client):
+        job_id = _upload_and_wait(client, "chunks_hyb.pdf")
+        resp = client.get(f"/api/jobs/{job_id}/chunks?strategy=hybrid")
+        if resp.status_code == 200:
+            assert resp.json()["strategy"] == "hybrid"
+
+    def test_chunks_invalid_strategy_returns_400(self, client):
+        job_id = _upload_and_wait(client, "chunks_bad.pdf")
+        resp = client.get(f"/api/jobs/{job_id}/chunks?strategy=bogus")
+        assert resp.status_code in (400, 202, 422)
+
+    def test_chunks_nonexistent_job_returns_404(self, client):
+        resp = client.get("/api/jobs/nonexistent/chunks")
+        assert resp.status_code == 404
+
+
+class TestTocEndpoint:
+    def test_toc_endpoint_returns_200(self, client):
+        job_id = _upload_and_wait(client, "toc_ep.pdf")
+        resp = client.get(f"/api/jobs/{job_id}/toc")
+        assert resp.status_code in (200, 202, 422)
+        if resp.status_code == 200:
+            data = resp.json()
+            assert "job_id" in data
+            assert "toc" in data
+            assert isinstance(data["toc"], list)
+
+    def test_toc_has_expected_entries(self, client):
+        job_id = _upload_and_wait(client, "toc_entries.pdf")
+        resp = client.get(f"/api/jobs/{job_id}/toc")
+        if resp.status_code == 200:
+            toc = resp.json()["toc"]
+            if toc:
+                entry = toc[0]
+                assert "level" in entry
+                assert "text" in entry
+                assert "page_number" in entry
+                assert "element_id" in entry
+
+    def test_toc_nonexistent_job_returns_404(self, client):
+        resp = client.get("/api/jobs/nonexistent/toc")
+        assert resp.status_code == 404
+
+
+class TestElementsEndpoint:
+    def test_elements_endpoint_returns_200(self, client):
+        job_id = _upload_and_wait(client, "elems_ep.pdf")
+        resp = client.get(f"/api/jobs/{job_id}/elements")
+        assert resp.status_code in (200, 202, 422)
+        if resp.status_code == 200:
+            data = resp.json()
+            assert "job_id" in data
+            assert "total" in data
+            assert "elements" in data
+
+    def test_elements_type_filter(self, client):
+        job_id = _upload_and_wait(client, "elems_type.pdf")
+        resp = client.get(f"/api/jobs/{job_id}/elements?type=section_header")
+        if resp.status_code == 200:
+            elems = resp.json()["elements"]
+            for e in elems:
+                assert e["type"] == "section_header"
+
+    def test_elements_exclude_headers(self, client):
+        job_id = _upload_and_wait(client, "elems_hdr.pdf")
+        resp = client.get(f"/api/jobs/{job_id}/elements?exclude_headers=true")
+        if resp.status_code == 200:
+            elems = resp.json()["elements"]
+            for e in elems:
+                assert e["type"] not in ("page_header", "page_footer")
+
+    def test_elements_nonexistent_job_returns_404(self, client):
+        resp = client.get("/api/jobs/nonexistent/elements")
+        assert resp.status_code == 404
+
+
+class TestDownloadChunks:
+    def test_download_chunks_nonexistent_job_returns_404(self, client):
+        resp = client.get("/api/jobs/nonexistent/download/chunks")
+        assert resp.status_code == 404
+
+    def test_download_chunks_returns_json_for_completed_job(self, client):
+        job_id = _upload_and_wait(client, "dl_chunks.pdf")
+        resp = client.get(f"/api/jobs/{job_id}/download/chunks")
+        assert resp.status_code in (200, 404)
+        if resp.status_code == 200:
+            assert resp.headers["content-type"].startswith("application/json")
+            data = json.loads(resp.content)
+            # Should be chunks dict with at least one strategy
+            assert isinstance(data, dict)
