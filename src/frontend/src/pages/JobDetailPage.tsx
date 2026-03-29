@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { Link, useParams, Navigate } from 'react-router-dom'
 import { useJobStatus } from '../hooks/useJobStatus'
 import { JobStatusBadge } from '../components/JobStatusBadge'
 import { DownloadButtons } from '../components/DownloadButtons'
 import { SplitPaneViewer } from '../components/SplitPaneViewer'
+import { reprocessJob } from '../services/api'
 
 export function JobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>()
@@ -14,6 +16,21 @@ export function JobDetailPage() {
 
 function JobDetail({ jobId }: { jobId: string }) {
   const { job, loading, error } = useJobStatus(jobId)
+  const [reprocessing, setReprocessing] = useState(false)
+
+  const handleReprocess = async () => {
+    setReprocessing(true)
+    try {
+      await reprocessJob(jobId)
+      // Don't re-enable — useJobStatus polling will hide the button
+      // once the job transitions to pending/running
+    } catch (err) {
+      // 409 = already processing, not a real error
+      if (err instanceof Error && err.message.includes('409')) return
+      console.error('Reprocess failed:', err)
+      setReprocessing(false)
+    }
+  }
 
   if (loading && !job) {
     return (
@@ -89,9 +106,18 @@ function JobDetail({ jobId }: { jobId: string }) {
           </div>
         )}
 
-        {/* Downloads */}
-        <div className="mb-2">
+        {/* Downloads + Reprocess */}
+        <div className="mb-2 flex items-center gap-3">
           <DownloadButtons jobId={jobId} enabled={job?.status === 'completed'} />
+          {job && job.status !== 'pending' && job.status !== 'running' && (
+            <button
+              onClick={handleReprocess}
+              disabled={reprocessing}
+              className="px-3 py-1.5 text-sm font-medium rounded border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {reprocessing ? 'Reprocessing...' : 'Reprocess'}
+            </button>
+          )}
         </div>
 
         {/* Processing indicator */}

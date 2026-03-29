@@ -51,8 +51,19 @@ def to_markdown(result: dict, output_path: Path) -> Path:
         lines.append("")
         for elem in page.get("elements", []):
             etype = elem.get("type")
-            if etype == "text":
-                content = elem.get("content", "").strip()
+            content = elem.get("content", "").strip()
+
+            if etype == "title":
+                if content:
+                    lines.append(f"# {content}")
+                    lines.append("")
+            elif etype == "section_header":
+                level = elem.get("hierarchy_level", 1)
+                prefix = "#" * min(level + 1, 6)
+                if content:
+                    lines.append(f"{prefix} {content}")
+                    lines.append("")
+            elif etype == "text":
                 if content:
                     lines.append(content)
                     lines.append("")
@@ -61,14 +72,45 @@ def to_markdown(result: dict, output_path: Path) -> Path:
                 if rows:
                     lines.append(_table_rows_to_gfm(rows))
                 else:
-                    content = elem.get("content", "").strip()
                     if content:
                         lines.append(content)
                 lines.append("")
-            elif etype == "image":
+            elif etype == "image" or etype == "figure":
                 img_path = elem.get("path", "")
                 lines.append(f"![Image]({img_path})")
                 lines.append("")
+            elif etype == "caption":
+                if content:
+                    lines.append(f"*{content}*")
+                    lines.append("")
+            elif etype == "formula":
+                latex = elem.get("content_latex", "")
+                if latex:
+                    lines.append(f"$$\n{latex}\n$$")
+                elif content:
+                    lines.append(f"`{content}`")
+                lines.append("")
+            elif etype == "code":
+                if content:
+                    lines.append(f"```\n{content}\n```")
+                    lines.append("")
+            elif etype == "list_item":
+                if content:
+                    indent = "  " * max(0, (elem.get("hierarchy_level", 1) - 1))
+                    lines.append(f"{indent}- {content}")
+            elif etype == "footnote":
+                if content:
+                    lines.append(f"> {content}")
+                    lines.append("")
+            elif etype == "reference":
+                if content:
+                    lines.append(f"- {content}")
+            elif etype in ("page_header", "page_footer"):
+                pass  # Omit running headers/footers from markdown
+            else:
+                if content:
+                    lines.append(content)
+                    lines.append("")
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
@@ -86,21 +128,21 @@ def to_text(result: dict, output_path: Path) -> Path:
         lines.append(f"=== Page {page_num} ===")
         for elem in page.get("elements", []):
             etype = elem.get("type")
-            if etype == "text":
-                content = elem.get("content", "").strip()
-                if content:
-                    lines.append(content)
+            content = elem.get("content", "").strip()
+            if etype in ("page_header", "page_footer"):
+                continue
             elif etype == "table":
                 rows = elem.get("rows")
                 if rows:
                     for row in rows:
                         lines.append("\t".join(str(c) for c in row))
-                else:
-                    content = elem.get("content", "").strip()
-                    if content:
-                        lines.append(content)
-            elif etype == "image":
+                elif content:
+                    lines.append(content)
+            elif etype in ("image", "figure"):
                 lines.append(f"[Image: {elem.get('path', '')}]")
+            else:
+                if content:
+                    lines.append(content)
         lines.append("")
 
     with open(output_path, "w", encoding="utf-8") as f:

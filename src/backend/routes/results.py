@@ -115,7 +115,8 @@ def get_pdf(job_id: str, db: Session = Depends(get_db)):
     return FileResponse(
         path=str(pdf_path),
         media_type="application/pdf",
-        headers={"Content-Disposition": f"inline; filename=\"{job.filename}\""},
+        filename=job.filename,
+        content_disposition_type="inline",
     )
 
 
@@ -146,6 +147,19 @@ def _require_completed(job: "Job") -> None:
         raise HTTPException(status_code=202, detail="Job is still processing")
     if job.status == "failed":
         raise HTTPException(status_code=422, detail="Job failed")
+
+
+@router.get("/jobs/{job_id}/structure")
+def get_structure(job_id: str, db: Session = Depends(get_db)):
+    """Return document structure analysis profile (fonts, hierarchy, reclassifications)."""
+    job = _get_job_or_404(job_id, db)
+    _require_completed(job)
+    parsed = _get_result_or_404(job_id, db)
+    try:
+        structure = json.loads(parsed.structure_json or "{}")
+    except (json.JSONDecodeError, TypeError):
+        structure = {}
+    return {"job_id": job_id, "structure_profile": structure}
 
 
 @router.get("/jobs/{job_id}/chunks")

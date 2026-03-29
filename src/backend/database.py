@@ -38,6 +38,7 @@ _JOB_MIGRATIONS = [
     "ALTER TABLE jobs ADD COLUMN chunk_count INTEGER",
     "ALTER TABLE jobs ADD COLUMN has_equations BOOLEAN DEFAULT 0",
     "ALTER TABLE jobs ADD COLUMN has_code BOOLEAN DEFAULT 0",
+    "ALTER TABLE jobs ADD COLUMN has_structure BOOLEAN DEFAULT 0",
 ]
 
 _RESULT_MIGRATIONS = [
@@ -46,6 +47,7 @@ _RESULT_MIGRATIONS = [
     "ALTER TABLE parsed_results ADD COLUMN toc_json TEXT",
     "ALTER TABLE parsed_results ADD COLUMN element_count INTEGER",
     "ALTER TABLE parsed_results ADD COLUMN chunks_path TEXT",
+    "ALTER TABLE parsed_results ADD COLUMN structure_json TEXT",
 ]
 
 

@@ -64,6 +64,10 @@ export function MarkdownTab({ jobId }: MarkdownTabProps) {
             <td className="px-3 py-2 text-gray-700 border-b border-gray-100">{children}</td>
           ),
           hr: () => <hr className="my-4 border-gray-200" />,
+          img: ({ src, alt }) => {
+            if (!src) return <span className="text-xs text-gray-400 italic">[Image]</span>
+            return <img src={src} alt={alt ?? 'image'} className="max-w-full rounded border border-gray-200 my-2" />
+          },
         }}
       >
         {content}

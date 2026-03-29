@@ -8,6 +8,37 @@ export type ElementType =
   | 'list' | 'list_item' | 'caption' | 'footnote' | 'formula'
   | 'page_header' | 'page_footer' | 'code' | 'reference'
 
+export interface FontInfo {
+  font_name: string
+  font_size: number
+  font_weight: number
+  is_bold: boolean
+  is_italic: boolean
+}
+
+export interface StructureHeadingFont {
+  level: number
+  name: string
+  size: number
+}
+
+export interface StructureProfile {
+  body_font: { name: string; size: number } | null
+  heading_fonts: StructureHeadingFont[]
+  page_number_font?: { name: string; size: number } | null
+  running_header_font?: { name: string; size: number } | null
+  font_size_histogram: Record<string, number>
+  structure_confidence: number
+  reclassified_elements: Array<{
+    element_id: string
+    original_type: string
+    suggested_type: string
+    suggested_level?: number | null
+    font_size: number
+    reason: string
+  }>
+}
+
 export interface ResultElement {
   element_id: string
   type: ElementType
@@ -20,6 +51,8 @@ export interface ResultElement {
   parent_id?: string
   parent_section?: string
   label?: string
+  font_info?: FontInfo
+  reclassified?: boolean
   // Table-specific
   rows?: string[][]
   num_rows?: number
@@ -80,7 +113,9 @@ export interface ResultMetadata {
   has_images: boolean
   has_equations?: boolean
   has_code?: boolean
+  has_structure_analysis?: boolean
   title?: string | null
+  structure_profile?: StructureProfile
 }
 
 export interface ParsedResult {
@@ -160,7 +195,15 @@ export async function getChunks(jobId: string, strategy?: string): Promise<Chunk
   const url = strategy
     ? `/api/jobs/${jobId}/chunks?strategy=${encodeURIComponent(strategy)}`
     : `/api/jobs/${jobId}/chunks`
-  return apiFetch<ChunksResponse>(url)
+  const response = await fetch(`${BASE_URL}${url}`)
+  if (response.status === 404) {
+    return { job_id: jobId, strategy: 'all', chunks: {} }
+  }
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`API error ${response.status}: ${text}`)
+  }
+  return response.json() as Promise<ChunksResponse>
 }
 
 export async function getToc(jobId: string): Promise<{ job_id: string; toc: TocEntry[] }> {
@@ -183,6 +226,10 @@ export async function deleteJob(jobId: string): Promise<void> {
   await apiFetch<unknown>(`/api/jobs/${jobId}`, { method: 'DELETE' })
 }
 
+export async function reprocessJob(jobId: string): Promise<{ job_id: string; status: string }> {
+  return apiFetch<{ job_id: string; status: string }>(`/api/jobs/${jobId}/reprocess`, { method: 'POST' })
+}
+
 export function getDownloadUrl(jobId: string, format: 'json' | 'markdown' | 'text'): string {
   return `/api/jobs/${jobId}/download/${format}`
 }
@@ -197,4 +244,12 @@ export function getImageUrl(jobId: string, filename: string): string {
 
 export function getPdfUrl(jobId: string): string {
   return `/api/jobs/${jobId}/pdf`
+}
+
+export async function getStructure(
+  jobId: string
+): Promise<{ job_id: string; structure_profile: StructureProfile }> {
+  return apiFetch<{ job_id: string; structure_profile: StructureProfile }>(
+    `/api/jobs/${jobId}/structure`
+  )
 }

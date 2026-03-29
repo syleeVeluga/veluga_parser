@@ -17,6 +17,7 @@ class ParsedResult(Base):
     result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     chunks_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     toc_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    structure_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     element_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     markdown_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     text_path: Mapped[str | None] = mapped_column(String(512), nullable=True)

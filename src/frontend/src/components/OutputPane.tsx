@@ -4,8 +4,9 @@ import { JsonTab } from './tabs/JsonTab'
 import { PlainTextTab } from './tabs/PlainTextTab'
 import { StructuredTab } from './tabs/StructuredTab'
 import { ChunksTab } from './tabs/ChunksTab'
+import { StructureAnalysisTab } from './tabs/StructureAnalysisTab'
 
-type Tab = 'markdown' | 'json' | 'text' | 'structure' | 'chunks'
+type Tab = 'markdown' | 'json' | 'text' | 'structure' | 'chunks' | 'analysis'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'markdown', label: 'Markdown' },
@@ -13,6 +14,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'text', label: 'Text' },
   { id: 'structure', label: 'Structure' },
   { id: 'chunks', label: 'Chunks' },
+  { id: 'analysis', label: 'Analysis' },
 ]
 
 interface OutputPaneProps {
@@ -49,6 +51,7 @@ export function OutputPane({ jobId, filename }: OutputPaneProps) {
         {activeTab === 'text' && <PlainTextTab jobId={jobId} />}
         {activeTab === 'structure' && <StructuredTab jobId={jobId} filename={filename} />}
         {activeTab === 'chunks' && <ChunksTab jobId={jobId} />}
+        {activeTab === 'analysis' && <StructureAnalysisTab jobId={jobId} />}
       </div>
     </div>
   )

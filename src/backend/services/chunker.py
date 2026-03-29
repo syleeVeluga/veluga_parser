@@ -272,12 +272,42 @@ def _chunk_hybrid(elements: list[dict], max_tokens: int = _DEFAULT_MAX_TOKENS) -
     return result
 
 
+def _reclassify_with_font_info(elements: list[dict], profile: dict) -> list[dict]:
+    """
+    Promote text elements to section_header when their font size matches
+    a detected heading tier. Updates elements in-place.
+    """
+    if not profile:
+        return elements
+    heading_fonts = profile.get("heading_fonts", [])
+    if not heading_fonts:
+        return elements
+    heading_size_to_level = {h["size"]: h["level"] for h in heading_fonts}
+    body_size = (profile.get("body_font") or {}).get("size", 0)
+
+    for elem in elements:
+        if elem["type"] != "text":
+            continue
+        fi = elem.get("font_info")
+        if not fi:
+            continue
+        font_size = fi["font_size"]
+        if font_size in heading_size_to_level and font_size > body_size + 0.5:
+            elem["type"] = "section_header"
+            elem["hierarchy_level"] = heading_size_to_level[font_size]
+            elem["reclassified"] = True
+
+    return elements
+
+
 def chunk_document(doc: dict) -> dict:
     """
     Populate doc["chunks"] with hierarchical, semantic, and hybrid chunk lists.
     Modifies the dict in-place and returns it.
     """
     elements = doc.get("elements", [])
+    profile = doc.get("metadata", {}).get("structure_profile", {})
+    _reclassify_with_font_info(elements, profile)
     doc["chunks"] = {
         "hierarchical": _chunk_hierarchical(elements),
         "semantic": _chunk_semantic(elements),

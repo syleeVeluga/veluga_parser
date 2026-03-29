@@ -175,24 +175,46 @@ function ListItemElement({ element }: { element: ResultElement }) {
   )
 }
 
+function FontTooltip({ element, children }: { element: ResultElement; children: React.ReactNode }) {
+  const fi = element.font_info
+  if (!fi) return <>{children}</>
+  const parts = [`${fi.font_name} ${fi.font_size}pt`]
+  if (fi.is_bold) parts.push('Bold')
+  if (fi.is_italic) parts.push('Italic')
+  const reclassified = (element as ResultElement & { reclassified?: boolean }).reclassified
+  if (reclassified) parts.push('(reclassified)')
+  return (
+    <div className="group relative">
+      {children}
+      <div className="pointer-events-none absolute left-0 -top-8 z-10 hidden group-hover:flex items-center">
+        <span className="px-2 py-1 text-xs bg-gray-800 text-white rounded shadow whitespace-nowrap">
+          {parts.join(' / ')}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 function ElementRenderer({ element, jobId }: { element: ResultElement; jobId: string }) {
+  let inner: React.ReactNode
   switch (element.type) {
-    case 'title': return <TitleElement element={element} />
-    case 'section_header': return <SectionHeaderElement element={element} />
-    case 'text': return <TextElement element={element} />
-    case 'table': return <TableElement element={element} />
+    case 'title': inner = <TitleElement element={element} />; break
+    case 'section_header': inner = <SectionHeaderElement element={element} />; break
+    case 'text': inner = <TextElement element={element} />; break
+    case 'table': inner = <TableElement element={element} />; break
     case 'image':
-    case 'figure': return <ImageElement element={element} jobId={jobId} />
-    case 'caption': return <CaptionElement element={element} />
-    case 'footnote': return <FootnoteElement element={element} />
-    case 'formula': return <FormulaElement element={element} />
-    case 'code': return <CodeElement element={element} />
-    case 'reference': return <ReferenceElement element={element} />
-    case 'list_item': return <ListItemElement element={element} />
-    case 'page_header': return <CollapsibleElement element={element} label="page header" />
-    case 'page_footer': return <CollapsibleElement element={element} label="page footer" />
-    default: return <TextElement element={element} />
+    case 'figure': inner = <ImageElement element={element} jobId={jobId} />; break
+    case 'caption': inner = <CaptionElement element={element} />; break
+    case 'footnote': inner = <FootnoteElement element={element} />; break
+    case 'formula': inner = <FormulaElement element={element} />; break
+    case 'code': inner = <CodeElement element={element} />; break
+    case 'reference': inner = <ReferenceElement element={element} />; break
+    case 'list_item': inner = <ListItemElement element={element} />; break
+    case 'page_header': inner = <CollapsibleElement element={element} label="page header" />; break
+    case 'page_footer': inner = <CollapsibleElement element={element} label="page footer" />; break
+    default: inner = <TextElement element={element} />
   }
+  return <FontTooltip element={element}>{inner}</FontTooltip>
 }
 
 function PageContent({ elements, jobId }: { elements: ResultElement[]; jobId: string }) {

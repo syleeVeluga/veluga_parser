@@ -1,5 +1,6 @@
 """
 POST /api/upload — accepts a PDF file and queues an async parsing job.
+POST /api/jobs/{job_id}/reprocess — re-run parsing on an existing job.
 """
 import hashlib
 import json
@@ -45,6 +46,9 @@ def _run_parse_job(job_id: str, file_path: Path, image_dir: Path) -> None:
 
         result = parse_pdf(file_path, image_dir)
 
+        from src.backend.services.structure_analyzer import analyze_structure
+        result = analyze_structure(file_path, result)
+
         from src.backend.services.chunker import chunk_document
         result = chunk_document(result)
 
@@ -54,22 +58,18 @@ def _run_parse_job(job_id: str, file_path: Path, image_dir: Path) -> None:
 
         meta = result.get("metadata", {})
         chunks = result.get("chunks", {})
-        job.status = "completed"
-        job.page_count = meta.get("total_pages", 0)
-        job.languages_detected = json.dumps(meta.get("languages", []))
-        job.doc_title = meta.get("title")
-        job.element_count = len(result.get("elements", []))
-        job.chunk_count = sum(len(v) for v in chunks.values())
-        job.has_equations = bool(meta.get("has_equations", False))
-        job.has_code = bool(meta.get("has_code", False))
-        db.commit()
 
+        # Serialize and save ParsedResult first, then mark job completed.
+        # This order prevents the job from appearing "completed" with no result row
+        # if a serialization or DB error occurs between the two commits.
+        structure_profile = meta.get("structure_profile", {})
         parsed = ParsedResult(
             job_id=job_id,
             schema_version=result.get("schema_version", "2.0"),
             result_json=json.dumps(result),
             chunks_json=json.dumps(chunks),
             toc_json=json.dumps(result.get("toc", [])),
+            structure_json=json.dumps(structure_profile) if structure_profile else None,
             element_count=len(result.get("elements", [])),
             image_dir=str(image_dir),
             json_path=export_paths["json_path"],
@@ -78,6 +78,17 @@ def _run_parse_job(job_id: str, file_path: Path, image_dir: Path) -> None:
             chunks_path=export_paths.get("chunks_path"),
         )
         db.add(parsed)
+        db.commit()
+
+        job.status = "completed"
+        job.page_count = meta.get("total_pages", 0)
+        job.languages_detected = json.dumps(meta.get("languages", []))
+        job.doc_title = meta.get("title")
+        job.element_count = len(result.get("elements", []))
+        job.chunk_count = sum(len(v) for v in chunks.values())
+        job.has_equations = bool(meta.get("has_equations", False))
+        job.has_code = bool(meta.get("has_code", False))
+        job.has_structure = bool(meta.get("has_structure_analysis", False))
         db.commit()
         logger.info(f"Job {job_id} completed successfully")
 
@@ -146,3 +157,40 @@ async def upload_pdf(
         "status": job.status,
         "created_at": job.created_at.isoformat() + "Z",
     }
+
+
+@router.post("/jobs/{job_id}/reprocess")
+async def reprocess_job(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Re-run parsing + chunking on an existing job without re-uploading."""
+    job = db.query(Job).filter(Job.id == job_id, Job.deleted_at.is_(None)).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status in ("pending", "running"):
+        raise HTTPException(status_code=409, detail="Job is already processing")
+
+    file_path = Path(job.file_path) if job.file_path else None
+    if not file_path or not file_path.exists():
+        raise HTTPException(status_code=410, detail="Original PDF no longer on disk")
+
+    # Delete old result
+    old_result = db.query(ParsedResult).filter(ParsedResult.job_id == job_id).first()
+    if old_result:
+        db.delete(old_result)
+
+    # Reset job state
+    job.status = "pending"
+    job.error_message = None
+    job.element_count = None
+    job.chunk_count = None
+    job.has_equations = None
+    job.has_code = None
+    db.commit()
+
+    image_dir = file_path.parent / "images"
+    background_tasks.add_task(_run_parse_job, job_id, file_path, image_dir)
+
+    return {"job_id": job_id, "status": "pending"}
