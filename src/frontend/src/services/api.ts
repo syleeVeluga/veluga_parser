@@ -234,6 +234,22 @@ export async function reprocessJob(jobId: string): Promise<{ job_id: string; sta
   return apiFetch<{ job_id: string; status: string }>(`/api/jobs/${jobId}/reprocess`, { method: 'POST' })
 }
 
+export interface ApiKeyStatus {
+  gemini_configured: boolean
+}
+
+export async function getApiKeyStatus(): Promise<ApiKeyStatus> {
+  return apiFetch<ApiKeyStatus>('/api/settings/api-keys')
+}
+
+export async function saveGeminiApiKey(key: string): Promise<ApiKeyStatus> {
+  return apiFetch<ApiKeyStatus>('/api/settings/api-keys', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ gemini_api_key: key }),
+  })
+}
+
 export function getDownloadUrl(jobId: string, format: 'json' | 'markdown' | 'text'): string {
   return `/api/jobs/${jobId}/download/${format}`
 }

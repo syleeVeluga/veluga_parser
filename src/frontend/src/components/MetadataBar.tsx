@@ -1,7 +1,13 @@
 import { useState } from 'react'
 import { JobStatusBadge } from './JobStatusBadge'
 import { DownloadButtons } from './DownloadButtons'
-import { reprocessJob, type JobSummary } from '../services/api'
+import { reprocessJob, type JobSummary, type EngineType } from '../services/api'
+
+const ENGINE_PILL: Record<EngineType, { label: string; className: string }> = {
+  docling: { label: 'Docling', className: 'bg-neutral-100 text-neutral-700' },
+  paddleocr: { label: 'PaddleOCR', className: 'bg-indigo-50 text-indigo-700' },
+  gemini: { label: 'Gemini', className: 'bg-violet-50 text-violet-700' },
+}
 
 interface MetadataBarProps {
   job: JobSummary
@@ -32,6 +38,14 @@ export function MetadataBar({ job }: MetadataBarProps) {
           {job.filename}
         </h2>
         <JobStatusBadge status={job.status} />
+        {job.engine && (
+          <span
+            data-testid="engine-pill"
+            className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${ENGINE_PILL[job.engine]?.className ?? 'bg-neutral-100 text-neutral-700'}`}
+          >
+            {ENGINE_PILL[job.engine]?.label ?? job.engine}
+          </span>
+        )}
 
         {job.status === 'completed' && (
           <div className="flex items-center gap-3 text-xs text-gray-500">

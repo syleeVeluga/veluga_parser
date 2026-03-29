@@ -4,6 +4,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import './styles/index.css'
 import { AppShell } from './components/AppShell'
 import { MainContent } from './components/MainContent'
+import { SettingsPage } from './pages/SettingsPage'
 
 const router = createBrowserRouter([
   {
@@ -12,6 +13,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <MainContent /> },
       { path: 'jobs/:jobId', element: <MainContent /> },
+      { path: 'settings', element: <SettingsPage /> },
     ],
   },
 ])

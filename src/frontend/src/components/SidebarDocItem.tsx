@@ -1,6 +1,12 @@
 import { useState } from 'react'
 import { JobStatusBadge } from './JobStatusBadge'
-import { deleteJob, type JobSummary } from '../services/api'
+import { deleteJob, type JobSummary, type EngineType } from '../services/api'
+
+const ENGINE_LABEL: Record<EngineType, string> = {
+  docling: 'Docling',
+  paddleocr: 'Paddle',
+  gemini: 'Gemini',
+}
 
 interface SidebarDocItemProps {
   job: JobSummary
@@ -52,6 +58,11 @@ export function SidebarDocItem({ job, active, onSelect, onDeleted }: SidebarDocI
           <div className="flex items-center gap-2 mt-1">
             <JobStatusBadge status={job.status} />
             <span className="text-xs text-gray-400">{dateStr}</span>
+            {job.engine && job.engine !== 'docling' && (
+              <span className="text-xs text-indigo-500 font-medium">
+                {ENGINE_LABEL[job.engine] ?? job.engine}
+              </span>
+            )}
           </div>
           {job.status === 'completed' && (
             <p className="text-xs text-gray-400 mt-0.5">
