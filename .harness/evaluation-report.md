@@ -1,105 +1,152 @@
-# Evaluation Report — Advanced RAG Chunking (Sprints 1, 2, 3)
+# Evaluation Report - Sprint 5: Side Panel UI Overhaul
 
 **Date:** 2026-03-29
 **Evaluator:** Independent QA (Claude Code)
-**Feature:** Advanced RAG Chunking — Rich Metadata Extraction via Docling
+**Feature:** Side Panel UI Overhaul — Replace two-page layout with single-page AppShell + collapsible sidebar
 
 ---
 
 ## Overall Result: PASS
 
----
-
-## Scores
-
-| Category        | Score (0–100) | Weight | Weighted Score |
-|-----------------|--------------|--------|---------------|
-| Functionality   | 88           | 30%    | 26.4          |
-| Code Quality    | 80           | 25%    | 20.0          |
-| Testing         | 92           | 20%    | 18.4          |
-| Security        | 90           | 15%    | 13.5          |
-| UI/UX           | 85           | 10%    | 8.5           |
-| **Total**       |              |        | **86.8**      |
-
 All categories >= 50%. Total >= 70%. No Critical bugs. **PASS.**
 
 ---
 
-## Test Results (Verbatim)
+## Scores
+| Category | Score (0-100) | Weight | Weighted Score |
+|----------|--------------|--------|---------------|
+| Functionality | 90 | 30% | 27.0 |
+| Code Quality | 92 | 25% | 23.0 |
+| Testing | 55 | 20% | 11.0 |
+| Security | 90 | 15% | 13.5 |
+| UI/UX | 88 | 10% | 8.8 |
+| **Total** | | | **83.3** |
 
-### Backend — pytest
-```
-116 passed in 1.80s
-```
-All 116 tests pass across:
-- `tests/unit/test_parser.py` — 31 tests
-- `tests/unit/test_chunker.py` — 30 tests
-- `tests/unit/test_exporter.py` — 15 tests
-- `tests/integration/test_api.py` — 37 tests (v2 schema / chunks / TOC / elements)
+---
 
-### Frontend — TypeScript check
-```
-npx tsc --noEmit → exit 0 (no output, zero errors)
-```
+## Static Check Results (Verbatim)
 
-### Frontend — Build
+### Build (`npm run build`)
 ```
-npm run build → exit 0
-tsc + vite build: 991 modules, 0 TS errors
-(Non-blocking warning: chunk > 500 kB)
+> tsc && vite build
+vite v8.0.3 building client environment for production...
+994 modules transformed.
+dist/index.html                   0.46 kB (gzip: 0.30 kB)
+dist/assets/index-B1LdDTMv.css  35.32 kB (gzip: 7.69 kB)
+dist/assets/index-CcO_J5Md.js  951.58 kB (gzip: 287.69 kB)
+built in 654ms
 ```
+Exit code: 0. Zero TypeScript errors.
 
-### Frontend — ESLint
+Note: Chunk size warning (>500 kB) is pre-existing from react-pdf, not a Sprint 5 regression.
+
+### Lint (`npm run lint`)
 ```
-npm run lint → EXIT 1
-ChunksTab.tsx:92:6 — react-hooks/exhaustive-deps: missing dependency 'strategy'
-1 problem (0 errors, 1 warning) — exceeds max-warnings 0
+> eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0
 ```
-ESLint fails. This is a Medium bug.
+Exit code: 0. Zero warnings, zero errors. Clean.
 
 ---
 
 ## Contract Item Results
 
-### Sprint 1: Rich Element Extraction
+- [PASS] **1. App loads with sidebar visible showing document list** — `AppShell` renders `Sidebar` by default (collapsed state from localStorage, defaults to expanded). `SidebarDocList` polls `listJobs(1, 100)` on mount and renders `SidebarDocItem` for each job.
 
-- [PASS] SC-1: `schema_version: "2.0"` returned on any PDF — confirmed in integration tests and parser.py.
-- [PASS] SC-2: Elements have `element_id`, `type`, `reading_order`, `page_number`, `bbox` — verified in parser and unit tests.
-- [PASS] SC-3: All 15 element types in `LABEL_TYPE_MAP` (title, section_header, text, table, image, figure, list, list_item, caption, footnote, formula, page_header, page_footer, code, reference).
-- [PASS] SC-4: `hierarchy_level` set on `section_header` via `_get_hierarchy_level()`; `title` gets level=0.
-- [PASS] SC-5: `parent_section` set via `section_stack`; verified by `test_parent_section_set_on_body_element_after_header`.
-- [PASS] SC-6: `toc` populated from title and section_header elements; two TOC tests pass.
-- [PASS] SC-7: `metadata.title` from first title element; verified by test.
-- [PASS] SC-8: `pages` array present for backward compat; `test_backward_compat_pages_array_present` passes.
-- [PASS] SC-9: Parser returns `chunks: {}` (empty dict); chunker fills it downstream.
-- [PASS] SC-10: All 116 tests pass.
+- [PASS] **2. Clicking a document in sidebar loads it in main content without page navigation** — `SidebarDocItem.onClick` calls `onSelect(job.job_id)` which triggers `navigate(/jobs/${id})` via `useNavigate` in `AppShell`. `MainContent` reads `useParams().jobId` and renders `DocumentViewer` with `useJobStatus` hook. No full page reload — client-side routing only.
 
-### Sprint 2: Chunker Service + New API Endpoints
+- [PASS] **3. Upload button in sidebar triggers file picker; after upload, new job appears and is auto-selected** — `Sidebar` uses hidden `<input type="file" ref={inputRef}>` with `inputRef.current.click()`. On successful upload, `onUploadComplete(result.job_id)` increments `refreshTrigger` (causing `SidebarDocList` to re-fetch) and navigates to the new job URL.
 
-- [PASS] SC-1: `/result` returns v2 with `chunks` having 3 strategy keys — `test_result_chunks_has_three_strategies` passes.
-- [PASS] SC-2: `/chunks` returns 200 with chunk array — `test_chunks_endpoint_returns_200_for_completed_job` passes.
-- [PASS] SC-3: `/chunks?strategy=hierarchical` filters correctly — `test_chunks_strategy_filter_hierarchical` passes.
-- [PASS] SC-4: `/toc` returns TOC array with correct fields — `test_toc_endpoint_returns_200` and `test_toc_has_expected_entries` pass.
-- [PASS] SC-5: `/elements?type=section_header` filters by type — `test_elements_type_filter` passes.
-- [PASS] SC-6: `/elements?exclude_headers=true` excludes page_header/page_footer — `test_elements_exclude_headers` passes.
-- [PASS] SC-7: `/download/chunks` returns JSON file — `test_download_chunks_returns_json_for_completed_job` passes.
-- [PASS] SC-8: Job list includes `doc_title`, `element_count`, `chunk_count` — confirmed in `jobs.py::_job_to_dict` and integration test.
-- [PASS] SC-9: Each chunk has all required fields (chunk_id, strategy, content, token_estimate, element_ids, page_numbers, section_path, metadata) — confirmed in chunker.py and unit tests.
-- [PASS] SC-10: Hybrid chunks <= 512 tokens unless single atomic element exceeds limit — manually verified with adversarial inputs (300-word elements). Atomics (table/image/figure/formula) are never split.
-- [PASS] SC-11: All 116 tests pass.
+- [PASS] **4. Sidebar collapse/expand works via button and keyboard shortcut (Ctrl+B / Cmd+B)** — Toggle button in sidebar header calls `onToggle`. `AppShell` registers global `keydown` listener checking `(e.ctrlKey || e.metaKey) && e.key === 'b'` with `e.preventDefault()`. On mobile (width < 768), keyboard shortcut toggles overlay drawer instead.
 
-### Sprint 3: Frontend Rich Structure Viewer + Chunk Explorer
+- [PASS] **5. All 6 output tabs render correctly for a completed job** — `OutputPane` imports and renders: MarkdownTab, JsonTab, PlainTextTab, StructuredTab, ChunksTab, StructureAnalysisTab. Component chain preserved: `MainContent` -> `SplitPaneViewer` -> `OutputPane` -> 6 tabs.
 
-- [PASS] SC-1: ChunksTab renders chunks for all 3 strategies — fetches all via `getChunks(jobId)`, stores in `allChunks` state.
-- [PASS] SC-2: Strategy selector switches chunk list — second `useEffect([strategy, allChunks])` updates displayed list on selection change.
-- [PASS] SC-3: `section_path` breadcrumb on chunks — ChunksTab lines 39–48 render path segments with `›` separators.
-- [PASS] SC-4: TocSidebar shows TOC; clicking calls `onNavigate(page_number)` propagated through StructuredTab to ResultsViewer.
-- [PASS] SC-5: SectionHeaderElement maps `hierarchy_level` → `text-xl/text-lg/text-base/text-sm` font sizes.
-- [PASS] SC-6: page_header/page_footer collapsed by default — `CollapsibleElement` starts `open=false`.
-- [PASS] SC-7: Chunk search filters in real time using `search` state on every render.
-- [PASS] SC-8: Chunks JSON download in ChunksTab (inline `<a download>`) and DownloadButtons.
-- [PASS] SC-9: `doc_title` shown in JobList (`JobList.tsx:127`) and JobDetailPage (`JobDetailPage.tsx:49–51`).
-- [FAIL] SC-10: `tsc --noEmit` exits 0 (TS types fine), but `npm run lint` exits 1 due to `react-hooks/exhaustive-deps` warning in ChunksTab.tsx:92.
+- [PASS] **6. PDF viewer renders and page navigation works** — `SplitPaneViewer` renders `PdfPane` in the left split panel. PdfPane component is unchanged; receives `jobId` prop correctly via the chain `MainContent` -> `SplitPaneViewer` -> `PdfPane`.
+
+- [PASS] **7. Download buttons (JSON, Markdown, Text, Chunks) work** — `MetadataBar` renders `DownloadButtons` with `jobId` and `enabled={job.status === 'completed'}`. All 4 download options (JSON, Markdown, Plain Text, Chunks JSON) use correct API URLs via `getDownloadUrl` and `getChunksDownloadUrl`.
+
+- [PASS] **8. Reprocess button works** — `MetadataBar` has reprocess button calling `reprocessJob(job.job_id)`. Shows "Reprocessing..." state while in progress. Disabled when job is pending/running. Error handling for 409 conflicts included.
+
+- [PASS] **9. Delete from sidebar removes document from list** — `SidebarDocItem` implements two-click delete confirmation (first click shows "Del"/"No", second click confirms). Calls `deleteJob(job.job_id)` then `onDeleted(jobId)`. `SidebarDocList.handleDeleted` filters the item from local state immediately.
+
+- [PASS] **10. Empty state shown when no document selected** — `MainContent` checks `if (!jobId) return <EmptyState />`. EmptyState renders centered "No document selected" message with document icon and guidance text.
+
+- [PASS] **11. URL reflects selected document (/jobs/:jobId)** — `handleSelectJob` in `AppShell` calls `navigate(/jobs/${id})`. Routing in `main.tsx`: `{ path: 'jobs/:jobId', element: <MainContent /> }`.
+
+- [PASS] **12. Direct navigation to /jobs/:jobId selects that document** — Verified via curl that `GET http://localhost:5174/jobs/0cc7a6b9-...` serves the SPA HTML. `MainContent` reads `jobId` from `useParams()` and loads the document. `AppShell` reads `jobId` from `useParams()` and passes as `activeJobId` to sidebar for highlighting.
+
+- [PASS] **13. Responsive: below 768px sidebar is an overlay drawer** — `AppShell` uses `mobileOpen` state. Desktop: `hidden md:flex` shows sidebar inline. Mobile: `fixed inset-y-0 left-0 z-50` positions sidebar as overlay. Backdrop: `fixed inset-0 bg-black/30 z-40 md:hidden` with click-to-close. FAB toggle button at bottom-left visible only on mobile.
+
+- [PASS] **14. `npm run build` succeeds with zero TypeScript errors** — Verified. See static check results above.
+
+- [PASS] **15. `npm run lint` passes with zero warnings** — Verified. See static check results above.
+
+---
+
+## Runtime Verification Evidence
+
+- Backend running on port 8000/8001, serving API responses with 2 completed jobs
+- Frontend dev server running on port 5174 (5173 was occupied)
+- API proxy verified: `GET http://localhost:5174/api/jobs` returns full JSON with 2 jobs, element counts, chunk counts
+- Direct URL navigation verified: `GET http://localhost:5174/jobs/0cc7a6b9-c94f-4c4b-a128-2d347e3eb6fb` serves SPA HTML correctly
+- Root URL verified: `GET http://localhost:5174/` serves SPA HTML correctly
+
+---
+
+## Code Quality Review
+
+### New Components Created (7 files, 633 lines total)
+
+| Component | Lines | Responsibility |
+|-----------|-------|----------------|
+| `AppShell.tsx` | 108 | Top-level layout: sidebar + main, keyboard shortcut, responsive state |
+| `Sidebar.tsx` | 164 | Collapsible sidebar: logo, upload button, document list |
+| `SidebarDocList.tsx` | 73 | Scrollable list with polling, loading/error states |
+| `SidebarDocItem.tsx` | 101 | Single document row: status badge, date, delete confirmation |
+| `MetadataBar.tsx` | 88 | Compact metadata: filename, status, counts, downloads, reprocess |
+| `MainContent.tsx` | 72 | Route-driven: empty state or document viewer |
+| `EmptyState.tsx` | 27 | Centered placeholder prompt |
+
+All files well under 300-line limit.
+
+### TypeScript Quality
+- Zero `any` types in all 7 new components (verified via grep)
+- All components use explicit TypeScript interfaces for props
+- `JobSummary` type from `services/api.ts` used consistently with proper union status types
+- Proper use of generics: `useParams<{ jobId: string }>()`
+
+### React Patterns
+- `useCallback` for event handlers passed as props (prevents unnecessary re-renders of `Sidebar`, `SidebarDocList`)
+- `useEffect` with proper cleanup for keyboard listener (`removeEventListener`)
+- `useEffect` with cleanup for polling interval (`clearInterval`)
+- `useState` with lazy initializer for localStorage read (avoids re-reading on every render)
+- `useRef<HTMLInputElement>` for file input access
+- `useParams` + `useNavigate` for URL sync (correct react-router-dom v7 usage)
+
+### Responsive Implementation
+- `md:` breakpoint (768px) used consistently for desktop/mobile
+- Mobile: overlay drawer with semi-transparent backdrop, `z-40`/`z-50` layering
+- Desktop: inline sidebar with smooth CSS transitions (`transition-all duration-200`)
+- Keyboard shortcut behavior adapts based on `window.innerWidth`
+
+### localStorage Persistence
+- Key: `veluga_sidebar_collapsed`
+- Both read and write wrapped in `try/catch` for privacy/SSR safety
+
+### Modified Components
+- `SplitPaneViewer.tsx`: Now uses flex-based `h-full` instead of hardcoded `calc()` — correct for the new layout
+- `main.tsx`: Clean routing structure with `AppShell` as root, `MainContent` as child for both index and `/jobs/:jobId`
+
+---
+
+## Unused Code Check
+
+Old files still exist but are NOT imported by the active routing:
+- `src/frontend/src/pages/HomePage.tsx` — dead code (imports `JobList` internally)
+- `src/frontend/src/pages/JobDetailPage.tsx` — dead code
+- `src/frontend/src/components/Layout.tsx` — dead code (replaced by `AppShell`)
+- `src/frontend/src/components/JobList.tsx` — dead code (replaced by `SidebarDocList`)
+
+These are tree-shaken out of the production build. Not importing them means no build impact. Acceptable to leave for now; recommend removal in a future cleanup sprint.
 
 ---
 
@@ -112,73 +159,20 @@ None.
 None.
 
 ### Medium
-
-**Bug M-1: ChunksTab.tsx — missing `useEffect` dependency causes lint failure**
-- File: `src/frontend/src/components/tabs/ChunksTab.tsx`, Line 87, 92
-- Issue: `useEffect(() => { ... setChunks(all[strategy] ?? []) ... }, [jobId])` reads `strategy` but does not include it in the dependency array. ESLint `react-hooks/exhaustive-deps` flags this, causing `npm run lint` to exit 1 (--max-warnings 0 policy).
-- Impact: `npm run lint` is a CI quality gate. The stale-closure risk is mitigated in practice by a separate `useEffect([strategy, allChunks])`, but the lint violation stands.
-- Fix: Remove line 87 (`setChunks(all[strategy] ?? [])`) from the fetch effect — trust the second effect to set `chunks` whenever `allChunks` or `strategy` changes.
-
-**Bug M-2: results.py — Duplicate DELETE handler (dead code, semantic inconsistency)**
-- File: `src/backend/routes/results.py`, Lines 244–264
-- Issue: `results.py` defines `DELETE /api/jobs/{job_id}` as a hard-delete (DB row removed + filesystem deleted). `jobs.py` also defines `DELETE /api/jobs/{job_id}` as a soft-delete (`deleted_at` timestamp). Because `jobs_router` is registered before `results_router`, FastAPI always routes to jobs.py. The results.py handler is dead code.
-- Impact: No runtime breakage today. If router order changes, hard-delete silently replaces soft-delete. The inconsistency creates maintenance confusion.
-- Fix: Remove the DELETE handler from `results.py`.
-
-**Bug M-3: results.py — `_get_job_or_404` ignores soft-delete**
-- File: `src/backend/routes/results.py`, Lines 28–32
-- Issue: `db.query(Job).filter(Job.id == job_id).first()` does not filter `deleted_at.is_(None)`. The new v2 endpoints (`/chunks`, `/toc`, `/elements`, `/pdf`) inherit this helper. A soft-deleted job would still be accessible via these endpoints.
-- Impact: Currently low-risk (the delete in jobs.py sets `deleted_at` and the job remains in DB), but logically incorrect — soft-deleted resources should be invisible.
-- Fix: Change filter to `db.query(Job).filter(Job.id == job_id, Job.deleted_at.is_(None)).first()`.
+- **Polling inefficiency on initial load**: In `SidebarDocList`, the interval is created unconditionally. If no jobs are pending/running on initial load, one unnecessary API call is made before the interval self-clears. Minor performance concern, not a functional bug.
 
 ### Low
-
-**Bug L-1: parser.py exceeds 300-line limit**
-- File: `src/backend/services/parser.py` — 343 lines (CLAUDE.md limit: 300)
-- Impact: Minor convention violation. No functional impact.
-
-**Bug L-2: ResultsViewer.tsx exceeds 300-line limit**
-- File: `src/frontend/src/components/ResultsViewer.tsx` — 322 lines
-- Impact: Minor convention violation. Element sub-components could be extracted.
-
-**Bug L-3: `list` element type has no dedicated renderer**
-- File: `src/frontend/src/components/ResultsViewer.tsx`
-- Issue: `ElementRenderer` switch has no `'list'` case — falls to `default: <TextElement>`. The container `list` element renders as plain text. `list_item` is correctly rendered with bullet+indent.
-- Impact: Visual fidelity only; functionally acceptable since Docling emits list_item children.
-
-**Bug L-4: `_estimate_tokens("")` returns 1 instead of 0**
-- File: `src/backend/services/chunker.py`, Line 21
-- Issue: `max(1, round(0 * 1.3))` = 1. Empty content chunks (e.g., images) report 1 token.
-- Impact: Negligible — no functional effect on chunking behavior.
-
----
-
-## Detailed Code Review
-
-### What Went Well
-
-- **Parser rewrite is clean and defensive**: All `hasattr`/`try-except` guards in place for Docling attributes (`prov`, `bbox`, `level`, `pages`), satisfying spec's documented risks.
-- **Chunker is pure and side-effect-free**: No I/O or state. Three strategies cleanly separated with shared helpers. Hybrid correctly delegates to hierarchical then splits at token boundaries.
-- **Test coverage is excellent**: 116 tests with meaningful assertions. Docling mocked cleanly. Edge cases covered: cross-page caption linking, empty documents, page-header-only documents, oversized atomics.
-- **API endpoints properly structured**: Input validation (invalid strategy → 400), correct HTTP status codes (404/202/422), error propagation.
-- **Security**: Path traversal check on image filenames uses both string check and `resolve().relative_to()` double-defense. No hardcoded secrets. No raw SQL. No `any` TypeScript type.
-- **Frontend types are complete**: All 15 element types, full `ResultElement`/`Chunk`/`TocEntry` interfaces. v2 API functions (`getChunks`, `getToc`, `getElements`) all typed.
-- **TOC navigation fully wired**: StructuredTab loads TOC, passes `activePage`/`onPageChange` bidirectionally between TocSidebar and ResultsViewer.
-- **DB migrations are idempotent**: `try/except` on each ALTER TABLE — safe to run on existing schemas.
-- **`list` and `list_item` in chunker `_BODY_TYPES`**: Both included, so they participate in chunking correctly even though `list` has no special renderer.
-
-### Needs Improvement
-
-- `src/frontend/src/components/tabs/ChunksTab.tsx`, Line 92: Remove `strategy` read from inside the `[jobId]`-only effect to fix lint.
-- `src/backend/routes/results.py`, Lines 244–264: Remove dead DELETE handler.
-- `src/backend/routes/results.py`, Lines 28–32: Add `deleted_at.is_(None)` filter.
+- **Dead code files**: Old page components (HomePage.tsx, JobDetailPage.tsx, Layout.tsx, JobList.tsx) should be removed in a future sprint to reduce codebase clutter.
+- **Bundle size**: 951 kB JS chunk exceeds Vite's 500 kB recommendation. Pre-existing from react-pdf, not introduced by Sprint 5.
+- **No upload error visibility when collapsed**: Upload error message renders inline in the expanded sidebar. If sidebar is collapsed during/after upload error, the error is not visible. Edge case, minor UX concern.
 
 ---
 
 ## Required Fixes for FAIL
 
-Not applicable — overall result is **PASS**. The following are strongly recommended for the next sprint:
+Not applicable — overall result is **PASS**.
 
-1. **[Medium — blocks lint gate]** Fix `ChunksTab.tsx` useEffect missing dependency. Remove line 87 from the fetch effect.
-2. **[Medium]** Remove dead DELETE handler from `results.py`.
-3. **[Medium]** Add soft-delete filter to `_get_job_or_404` in `results.py`.
+Recommended for future sprints:
+1. Remove dead code files (HomePage.tsx, JobDetailPage.tsx, Layout.tsx, JobList.tsx)
+2. Consider code-splitting react-pdf to reduce bundle size
+3. Add Playwright E2E tests (Sprint 6 as planned in spec)
