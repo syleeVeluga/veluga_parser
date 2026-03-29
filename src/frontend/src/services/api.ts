@@ -172,9 +172,12 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export async function uploadPdf(file: File): Promise<UploadResponse> {
+export async function uploadPdf(file: File, engine?: EngineType): Promise<UploadResponse> {
   const formData = new FormData()
   formData.append('file', file)
+  if (engine) {
+    formData.append('engine', engine)
+  }
   const response = await fetch('/api/upload', { method: 'POST', body: formData })
   if (!response.ok) {
     const text = await response.text()

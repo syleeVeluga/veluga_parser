@@ -114,6 +114,14 @@ export async function mockAllApis(page: Page) {
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_UPLOAD_RESPONSE) }),
   )
 
+  // Settings API keys
+  await page.route('**/api/settings/api-keys', route => {
+    if (route.request().method() === 'POST') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: '{"gemini_configured":true}' })
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '{"gemini_configured":false}' })
+  })
+
   // Images — 1x1 transparent PNG
   await page.route('**/api/jobs/*/images/*', route =>
     route.fulfill({

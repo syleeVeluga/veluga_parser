@@ -1,7 +1,9 @@
-import { useRef, type ChangeEvent } from 'react'
+import { useRef, useState, useEffect, type ChangeEvent } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useUpload } from '../hooks/useUpload'
 import { SidebarDocList } from './SidebarDocList'
+import { EngineSelector } from './EngineSelector'
+import { getApiKeyStatus, type EngineType } from '../services/api'
 
 interface SidebarProps {
   collapsed: boolean
@@ -23,6 +25,14 @@ export function Sidebar({
   const { state, error, upload } = useUpload()
   const inputRef = useRef<HTMLInputElement>(null)
   const location = useLocation()
+  const [selectedEngine, setSelectedEngine] = useState<EngineType>('docling')
+  const [geminiConfigured, setGeminiConfigured] = useState(false)
+
+  useEffect(() => {
+    getApiKeyStatus()
+      .then(s => setGeminiConfigured(s.gemini_configured))
+      .catch(() => {})
+  }, [])
 
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -31,7 +41,7 @@ export function Sidebar({
       if (inputRef.current) inputRef.current.value = ''
       return
     }
-    const result = await upload(file)
+    const result = await upload(file, selectedEngine)
     if (result) {
       onUploadComplete(result.job_id)
     }
@@ -108,6 +118,16 @@ export function Sidebar({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
+      </div>
+
+      {/* Engine selector */}
+      <div className="px-3 py-2 border-b border-gray-100">
+        <span className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1.5 block">Engine</span>
+        <EngineSelector
+          value={selectedEngine}
+          onChange={setSelectedEngine}
+          geminiConfigured={geminiConfigured}
+        />
       </div>
 
       {/* Upload button */}
