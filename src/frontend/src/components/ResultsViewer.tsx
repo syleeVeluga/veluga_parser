@@ -7,13 +7,43 @@ import {
   type ResultMetadata,
 } from '../services/api'
 
-interface ResultsViewerProps {
-  jobId: string
-  filename: string
-  status: string
+// Element type → left-border accent color
+const BORDER_COLORS: Record<string, string> = {
+  title: 'border-blue-500',
+  section_header: 'border-blue-400',
+  text: 'border-gray-200',
+  table: 'border-amber-400',
+  image: 'border-purple-400',
+  figure: 'border-purple-400',
+  formula: 'border-green-400',
+  caption: 'border-indigo-300',
+  footnote: 'border-gray-300',
+  code: 'border-slate-400',
+  reference: 'border-gray-300',
+  list: 'border-gray-200',
+  list_item: 'border-gray-200',
+  page_header: 'border-gray-100',
+  page_footer: 'border-gray-100',
 }
 
-// --- Sub-components ---
+function TitleElement({ element }: { element: ResultElement }) {
+  return (
+    <h1 className="text-xl font-bold text-gray-900 mb-3 leading-tight border-l-4 border-blue-500 pl-3">
+      {element.content}
+    </h1>
+  )
+}
+
+function SectionHeaderElement({ element }: { element: ResultElement }) {
+  const level = element.hierarchy_level ?? 1
+  const sizes = ['text-xl', 'text-lg', 'text-base', 'text-sm']
+  const sizeClass = sizes[Math.min(level, sizes.length - 1)]
+  return (
+    <div className={`border-l-4 border-blue-400 pl-3 mb-2 mt-4`}>
+      <span className={`${sizeClass} font-semibold text-gray-800`}>{element.content}</span>
+    </div>
+  )
+}
 
 function TextElement({ element }: { element: ResultElement }) {
   return (
@@ -26,19 +56,16 @@ function TextElement({ element }: { element: ResultElement }) {
 function TableElement({ element }: { element: ResultElement }) {
   const rows = element.rows
   if (!rows || rows.length === 0) {
-    return <pre className="text-xs bg-gray-50 p-2 rounded">{element.content}</pre>
+    return <pre className="text-xs bg-gray-50 p-2 rounded border border-amber-200 mb-3">{element.content}</pre>
   }
   const [header, ...dataRows] = rows
   return (
-    <div className="overflow-x-auto mb-3">
+    <div className="overflow-x-auto mb-3 border-l-4 border-amber-400 pl-2">
       <table className="min-w-full text-xs border border-gray-200 rounded">
-        <thead className="bg-gray-100">
+        <thead className="bg-amber-50">
           <tr>
             {header.map((cell, ci) => (
-              <th
-                key={`h-${ci}-${String(cell)}`}
-                className="px-3 py-2 text-left font-semibold text-gray-700 border-b border-gray-200"
-              >
+              <th key={ci} className="px-3 py-2 text-left font-semibold text-gray-700 border-b border-gray-200">
                 {cell}
               </th>
             ))}
@@ -46,17 +73,9 @@ function TableElement({ element }: { element: ResultElement }) {
         </thead>
         <tbody>
           {dataRows.map((row, ri) => (
-            <tr
-              key={`r-${ri}-${row.join('|')}`}
-              className={ri % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
-            >
+            <tr key={ri} className={ri % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
               {row.map((cell, ci) => (
-                <td
-                  key={`c-${ri}-${ci}-${String(cell)}`}
-                  className="px-3 py-2 text-gray-700 border-b border-gray-100"
-                >
-                  {cell}
-                </td>
+                <td key={ci} className="px-3 py-2 text-gray-700 border-b border-gray-100">{cell}</td>
               ))}
             </tr>
           ))}
@@ -69,25 +88,15 @@ function TableElement({ element }: { element: ResultElement }) {
 function ImageElement({ element, jobId }: { element: ResultElement; jobId: string }) {
   const [imgError, setImgError] = useState(false)
   const filename = element.path?.split(/[\\/]/).pop() ?? ''
-
   if (!filename || imgError) {
     return (
-      <div className="mb-2 text-xs text-gray-500 italic flex items-center gap-1">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-          />
-        </svg>
+      <div className="mb-2 text-xs text-gray-500 italic flex items-center gap-1 border-l-4 border-purple-400 pl-2">
         [Image: {filename || 'image'}]
       </div>
     )
   }
-
   return (
-    <div className="mb-3">
+    <div className="mb-3 border-l-4 border-purple-400 pl-2">
       <img
         src={getImageUrl(jobId, filename)}
         alt={filename}
@@ -98,27 +107,106 @@ function ImageElement({ element, jobId }: { element: ResultElement; jobId: strin
   )
 }
 
-function PageContent({ elements, jobId }: { elements: ResultElement[]; jobId: string }) {
+function CaptionElement({ element }: { element: ResultElement }) {
   return (
-    <div>
-      {elements.map((elem, i) => {
-        if (elem.type === 'text') return <TextElement key={`text-${i}`} element={elem} />
-        if (elem.type === 'table') return <TableElement key={`table-${i}`} element={elem} />
-        if (elem.type === 'image') return <ImageElement key={`img-${i}`} element={elem} jobId={jobId} />
-        return null
-      })}
+    <p className="text-xs italic text-gray-500 mb-2 border-l-4 border-indigo-300 pl-2">
+      {element.content}
+    </p>
+  )
+}
+
+function FootnoteElement({ element }: { element: ResultElement }) {
+  return (
+    <p className="text-xs text-gray-400 mb-1 border-l-4 border-gray-300 pl-2">
+      {element.content}
+    </p>
+  )
+}
+
+function FormulaElement({ element }: { element: ResultElement }) {
+  return (
+    <pre className="text-xs font-mono bg-green-50 border border-green-200 rounded p-2 mb-2 border-l-4 border-green-400 whitespace-pre-wrap">
+      {element.content_latex || element.content}
+    </pre>
+  )
+}
+
+function CodeElement({ element }: { element: ResultElement }) {
+  return (
+    <pre className="text-xs font-mono bg-slate-50 border border-slate-200 rounded p-2 mb-2 border-l-4 border-slate-400 overflow-x-auto">
+      {element.content}
+    </pre>
+  )
+}
+
+function ReferenceElement({ element }: { element: ResultElement }) {
+  return (
+    <p className="text-xs text-gray-600 mb-1 border-l-4 border-gray-300 pl-2 before:content-['▸_'] before:text-gray-400">
+      {element.content}
+    </p>
+  )
+}
+
+function CollapsibleElement({ element, label }: { element: ResultElement; label: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="mb-1">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
+      >
+        <span>{open ? '▾' : '▸'}</span>
+        <span className="italic">[{label}]</span>
+      </button>
+      {open && (
+        <p className="text-xs text-gray-400 pl-4 italic mt-0.5">{element.content}</p>
+      )}
     </div>
   )
 }
 
-function ViewerMetadataPanel({
-  filename,
-  metadata,
-  status,
-}: {
-  filename: string
-  metadata: ResultMetadata
-  status: string
+function ListItemElement({ element }: { element: ResultElement }) {
+  const indent = (element.hierarchy_level ?? 1) - 1
+  return (
+    <div className={`text-sm text-gray-800 mb-0.5`} style={{ paddingLeft: `${indent * 16 + 8}px` }}>
+      <span className="text-gray-400 mr-1">•</span>
+      {element.content}
+    </div>
+  )
+}
+
+function ElementRenderer({ element, jobId }: { element: ResultElement; jobId: string }) {
+  switch (element.type) {
+    case 'title': return <TitleElement element={element} />
+    case 'section_header': return <SectionHeaderElement element={element} />
+    case 'text': return <TextElement element={element} />
+    case 'table': return <TableElement element={element} />
+    case 'image':
+    case 'figure': return <ImageElement element={element} jobId={jobId} />
+    case 'caption': return <CaptionElement element={element} />
+    case 'footnote': return <FootnoteElement element={element} />
+    case 'formula': return <FormulaElement element={element} />
+    case 'code': return <CodeElement element={element} />
+    case 'reference': return <ReferenceElement element={element} />
+    case 'list_item': return <ListItemElement element={element} />
+    case 'page_header': return <CollapsibleElement element={element} label="page header" />
+    case 'page_footer': return <CollapsibleElement element={element} label="page footer" />
+    default: return <TextElement element={element} />
+  }
+}
+
+function PageContent({ elements, jobId }: { elements: ResultElement[]; jobId: string }) {
+  return (
+    <div>
+      {elements.map((elem, i) => (
+        <ElementRenderer key={elem.element_id ?? `elem-${i}`} element={elem} jobId={jobId} />
+      ))}
+    </div>
+  )
+}
+
+function ViewerMetadataPanel({ filename, metadata, status }: {
+  filename: string; metadata: ResultMetadata; status: string
 }) {
   const statusColors: Record<string, string> = {
     completed: 'bg-green-100 text-green-700',
@@ -126,43 +214,41 @@ function ViewerMetadataPanel({
     running: 'bg-blue-100 text-blue-700',
     pending: 'bg-gray-100 text-gray-600',
   }
-  const badgeClass = statusColors[status] ?? 'bg-gray-100 text-gray-600'
-
   return (
     <div className="flex flex-wrap items-center gap-2 mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm">
-      <span className="font-medium text-gray-800 truncate max-w-xs" title={filename}>
-        {filename}
-      </span>
+      <span className="font-medium text-gray-800 truncate max-w-xs" title={filename}>{filename}</span>
       <span className="text-gray-400">·</span>
       <span className="text-gray-600">{metadata.total_pages} page{metadata.total_pages !== 1 ? 's' : ''}</span>
-      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badgeClass}`}>
+      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[status] ?? 'bg-gray-100 text-gray-600'}`}>
         {status}
       </span>
       {metadata.languages.length > 0 && (
         <span className="text-gray-500 text-xs">{metadata.languages.join(', ')}</span>
       )}
-      {metadata.has_tables && (
-        <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">
-          Tables
-        </span>
-      )}
-      {metadata.has_images && (
-        <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
-          Images
-        </span>
-      )}
+      {metadata.has_tables && <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs">Tables</span>}
+      {metadata.has_images && <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs">Images</span>}
+      {metadata.has_equations && <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs">Equations</span>}
+      {metadata.has_code && <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-full text-xs">Code</span>}
     </div>
   )
 }
 
-// --- Main component ---
+interface ResultsViewerProps {
+  jobId: string
+  filename: string
+  status: string
+  activePage?: number
+  onPageChange?: (page: number) => void
+}
 
-export function ResultsViewer({ jobId, filename, status }: ResultsViewerProps) {
+export function ResultsViewer({ jobId, filename, status, activePage: externalPage, onPageChange }: ResultsViewerProps) {
   const [result, setResult] = useState<ParsedResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activePage, setActivePage] = useState(1)
+  const [internalPage, setInternalPage] = useState(1)
   const contentRef = useRef<HTMLDivElement>(null)
+
+  const activePage = externalPage ?? internalPage
 
   useEffect(() => {
     getResult(jobId)
@@ -180,24 +266,15 @@ export function ResultsViewer({ jobId, filename, status }: ResultsViewerProps) {
   const currentIndex = result.pages.findIndex(p => p.page_number === activePage)
 
   const goToPage = (pageNumber: number) => {
-    setActivePage(pageNumber)
+    setInternalPage(pageNumber)
+    onPageChange?.(pageNumber)
     if (contentRef.current) contentRef.current.scrollTop = 0
-  }
-
-  const goPrev = () => {
-    if (currentIndex > 0) goToPage(result.pages[currentIndex - 1].page_number)
-  }
-
-  const goNext = () => {
-    if (currentIndex < totalPages - 1) goToPage(result.pages[currentIndex + 1].page_number)
   }
 
   return (
     <div className="mt-4">
       <ViewerMetadataPanel filename={filename} metadata={result.metadata} status={status} />
-
       <div className="flex gap-4">
-        {/* Page sidebar */}
         <div className="w-36 shrink-0">
           <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Pages</h3>
           <ul className="space-y-1">
@@ -206,57 +283,40 @@ export function ResultsViewer({ jobId, filename, status }: ResultsViewerProps) {
                 <button
                   onClick={() => goToPage(p.page_number)}
                   className={`w-full text-left px-3 py-1.5 rounded text-xs transition-colors
-                    ${activePage === p.page_number
-                      ? 'bg-blue-100 text-blue-700 font-medium'
-                      : 'text-gray-600 hover:bg-gray-100'
-                    }`}
+                    ${activePage === p.page_number ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-100'}`}
                 >
                   <div>Page {p.page_number}</div>
-                  <div className="text-gray-400 font-normal">
-                    {p.elements.length} item{p.elements.length !== 1 ? 's' : ''}
-                  </div>
+                  <div className="text-gray-400 font-normal">{p.elements.length} item{p.elements.length !== 1 ? 's' : ''}</div>
                 </button>
               </li>
             ))}
           </ul>
         </div>
 
-        {/* Content area */}
         <div className="flex-1 min-w-0 flex flex-col">
-          {/* Prev / Next navigation */}
           <div className="flex items-center justify-between mb-2">
             <button
-              onClick={goPrev}
+              onClick={() => { if (currentIndex > 0) goToPage(result.pages[currentIndex - 1].page_number) }}
               disabled={currentIndex <= 0}
               className="px-3 py-1.5 text-xs rounded border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              ← Prev
-            </button>
-            <span className="text-xs text-gray-500">
-              Page {activePage} of {totalPages}
-            </span>
+            >← Prev</button>
+            <span className="text-xs text-gray-500">Page {activePage} of {totalPages}</span>
             <button
-              onClick={goNext}
+              onClick={() => { if (currentIndex < totalPages - 1) goToPage(result.pages[currentIndex + 1].page_number) }}
               disabled={currentIndex >= totalPages - 1}
               className="px-3 py-1.5 text-xs rounded border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Next →
-            </button>
+            >Next →</button>
           </div>
-
-          {/* Scrollable content */}
-          <div
-            ref={contentRef}
-            className="border border-gray-200 rounded-lg p-4 bg-white overflow-y-auto max-h-[600px]"
-          >
-            {currentPage ? (
-              <PageContent elements={currentPage.elements} jobId={jobId} />
-            ) : (
-              <p className="text-gray-400 text-sm">No content on this page</p>
-            )}
+          <div ref={contentRef} className="border border-gray-200 rounded-lg p-4 bg-white overflow-y-auto max-h-[600px]">
+            {currentPage
+              ? <PageContent elements={currentPage.elements} jobId={jobId} />
+              : <p className="text-gray-400 text-sm">No content on this page</p>
+            }
           </div>
         </div>
       </div>
     </div>
   )
 }
+
+export { BORDER_COLORS }

@@ -1,0 +1,166 @@
+import { useState, useEffect } from 'react'
+import { getChunks, getChunksDownloadUrl, type Chunk } from '../../services/api'
+
+type Strategy = 'hierarchical' | 'semantic' | 'hybrid'
+
+const STRATEGIES: { id: Strategy; label: string; desc: string }[] = [
+  { id: 'hybrid', label: 'Hybrid', desc: 'Hierarchical + token-window split (recommended)' },
+  { id: 'hierarchical', label: 'Hierarchical', desc: 'One chunk per section' },
+  { id: 'semantic', label: 'Semantic', desc: 'Tables/figures as atomic chunks; prose grouped' },
+]
+
+function ChunkCard({ chunk }: { chunk: Chunk }) {
+  const [expanded, setExpanded] = useState(false)
+  const preview = chunk.content.slice(0, 300)
+  const truncated = chunk.content.length > 300
+
+  return (
+    <div className="border border-gray-200 rounded-lg p-3 bg-white hover:border-gray-300 transition-colors">
+      {/* Header row */}
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-mono text-gray-400">{chunk.chunk_id}</span>
+          <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-medium">
+            ~{chunk.token_estimate} tokens
+          </span>
+          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+            p.{chunk.page_numbers.join('–')}
+          </span>
+          {chunk.metadata.has_table && (
+            <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">Table</span>
+          )}
+          {chunk.metadata.has_image && (
+            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">Image</span>
+          )}
+        </div>
+      </div>
+
+      {/* Section path breadcrumb */}
+      {chunk.section_path.length > 0 && (
+        <div className="flex items-center gap-1 mb-2 flex-wrap">
+          {chunk.section_path.map((seg, i) => (
+            <span key={i} className="flex items-center gap-1">
+              {i > 0 && <span className="text-gray-300 text-xs">›</span>}
+              <span className="text-xs text-gray-500 truncate max-w-[180px]" title={seg}>{seg}</span>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Content preview */}
+      <pre className="text-xs text-gray-700 whitespace-pre-wrap font-sans leading-relaxed bg-gray-50 rounded p-2 max-h-32 overflow-hidden">
+        {expanded ? chunk.content : preview}
+        {!expanded && truncated && <span className="text-gray-400">…</span>}
+      </pre>
+      {truncated && (
+        <button
+          onClick={() => setExpanded(e => !e)}
+          className="mt-1 text-xs text-blue-600 hover:text-blue-800"
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+interface ChunksTabProps {
+  jobId: string
+}
+
+export function ChunksTab({ jobId }: ChunksTabProps) {
+  const [strategy, setStrategy] = useState<Strategy>('hybrid')
+  const [chunks, setChunks] = useState<Chunk[]>([])
+  const [allChunks, setAllChunks] = useState<Record<Strategy, Chunk[]>>({
+    hierarchical: [], semantic: [], hybrid: [],
+  })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    setLoading(true)
+    getChunks(jobId)
+      .then(data => {
+        const all = data.chunks as Record<Strategy, Chunk[]>
+        setAllChunks(all)
+        setChunks(all[strategy] ?? [])
+        setError(null)
+      })
+      .catch(err => setError(err instanceof Error ? err.message : 'Failed to load chunks'))
+      .finally(() => setLoading(false))
+  }, [jobId])
+
+  useEffect(() => {
+    setChunks(allChunks[strategy] ?? [])
+  }, [strategy, allChunks])
+
+  const filtered = search.trim()
+    ? chunks.filter(c => c.content.toLowerCase().includes(search.toLowerCase()))
+    : chunks
+
+  if (loading) return <div className="p-4 text-gray-500 text-sm">Loading chunks...</div>
+  if (error) return <div className="p-4 text-red-600 text-sm">{error}</div>
+
+  return (
+    <div className="p-4 h-full flex flex-col gap-3">
+      {/* Strategy selector */}
+      <div className="flex gap-2 flex-wrap items-center justify-between">
+        <div className="flex gap-1">
+          {STRATEGIES.map(s => (
+            <button
+              key={s.id}
+              onClick={() => setStrategy(s.id)}
+              title={s.desc}
+              className={`px-3 py-1.5 rounded text-xs font-medium transition-colors
+                ${strategy === s.id
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+            >
+              {s.label}
+              <span className="ml-1.5 text-[10px] opacity-70">
+                ({allChunks[s.id]?.length ?? 0})
+              </span>
+            </button>
+          ))}
+        </div>
+        <a
+          href={getChunksDownloadUrl(jobId)}
+          download
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-blue-400 text-blue-600 hover:bg-blue-50 transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Chunks JSON
+        </a>
+      </div>
+
+      {/* Search */}
+      <input
+        type="text"
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        placeholder="Search chunks..."
+        className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-400"
+      />
+
+      {/* Count */}
+      <p className="text-xs text-gray-500">
+        {filtered.length} chunk{filtered.length !== 1 ? 's' : ''}
+        {search && ` matching "${search}"`}
+      </p>
+
+      {/* Chunk list */}
+      <div className="flex-1 overflow-y-auto space-y-2 pb-2">
+        {filtered.length === 0 ? (
+          <p className="text-xs text-gray-400 italic">No chunks found.</p>
+        ) : (
+          filtered.map(chunk => <ChunkCard key={chunk.chunk_id} chunk={chunk} />)
+        )}
+      </div>
+    </div>
+  )
+}

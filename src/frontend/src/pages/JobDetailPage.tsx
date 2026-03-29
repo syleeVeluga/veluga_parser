@@ -46,6 +46,11 @@ function JobDetail({ jobId }: { jobId: string }) {
         {/* Metadata */}
         {job && (
           <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+            {job.doc_title && (
+              <p className="text-sm text-gray-600 mb-3 italic" title={job.doc_title}>
+                "{job.doc_title}"
+              </p>
+            )}
             <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
               <div>
                 <dt className="text-gray-500">Status</dt>
@@ -54,6 +59,14 @@ function JobDetail({ jobId }: { jobId: string }) {
               <div>
                 <dt className="text-gray-500">Pages</dt>
                 <dd className="font-medium text-gray-900">{job.page_count ?? '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Elements</dt>
+                <dd className="font-medium text-gray-900">{job.element_count ?? '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Chunks</dt>
+                <dd className="font-medium text-gray-900">{job.chunk_count ?? '—'}</dd>
               </div>
               <div>
                 <dt className="text-gray-500">Languages</dt>

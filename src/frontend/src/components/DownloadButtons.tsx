@@ -1,4 +1,4 @@
-import { getDownloadUrl } from '../services/api'
+import { getDownloadUrl, getChunksDownloadUrl } from '../services/api'
 
 interface DownloadButtonsProps {
   jobId: string
@@ -6,24 +6,24 @@ interface DownloadButtonsProps {
 }
 
 interface DownloadOption {
-  format: 'json' | 'markdown' | 'text'
   label: string
-  mimeType: string
+  href: string
 }
 
-const DOWNLOAD_OPTIONS: DownloadOption[] = [
-  { format: 'json', label: 'JSON', mimeType: 'application/json' },
-  { format: 'markdown', label: 'Markdown', mimeType: 'text/markdown' },
-  { format: 'text', label: 'Plain Text', mimeType: 'text/plain' },
-]
-
 export function DownloadButtons({ jobId, enabled }: DownloadButtonsProps) {
+  const options: DownloadOption[] = [
+    { label: 'JSON', href: getDownloadUrl(jobId, 'json') },
+    { label: 'Markdown', href: getDownloadUrl(jobId, 'markdown') },
+    { label: 'Plain Text', href: getDownloadUrl(jobId, 'text') },
+    { label: 'Chunks JSON', href: getChunksDownloadUrl(jobId) },
+  ]
+
   return (
     <div className="flex gap-2 flex-wrap">
-      {DOWNLOAD_OPTIONS.map(({ format, label }) => (
+      {options.map(({ label, href }) => (
         <a
-          key={format}
-          href={enabled ? getDownloadUrl(jobId, format) : undefined}
+          key={label}
+          href={enabled ? href : undefined}
           download
           aria-disabled={!enabled}
           className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors

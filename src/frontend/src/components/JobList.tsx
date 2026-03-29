@@ -113,6 +113,7 @@ export function JobList() {
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">File</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pages</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Elements / Chunks</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Languages</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
               <th className="px-4 py-3" />
@@ -121,9 +122,19 @@ export function JobList() {
           <tbody className="bg-white divide-y divide-gray-100">
             {items.map(job => (
               <tr key={job.job_id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{job.filename}</td>
+                <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
+                  <div className="truncate font-medium">{job.filename}</div>
+                  {job.doc_title && (
+                    <div className="text-xs text-gray-500 truncate" title={job.doc_title}>{job.doc_title}</div>
+                  )}
+                </td>
                 <td className="px-4 py-3"><JobStatusBadge status={job.status} /></td>
                 <td className="px-4 py-3 text-sm text-gray-600">{job.page_count ?? '—'}</td>
+                <td className="px-4 py-3 text-sm text-gray-600">
+                  {job.element_count != null
+                    ? <span>{job.element_count} / {job.chunk_count ?? 0}</span>
+                    : '—'}
+                </td>
                 <td className="px-4 py-3 text-sm text-gray-600">
                   {job.languages_detected.length > 0 ? job.languages_detected.join(', ') : '—'}
                 </td>

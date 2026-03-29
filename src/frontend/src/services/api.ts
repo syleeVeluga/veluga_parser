@@ -1,32 +1,71 @@
 /**
  * Typed fetch wrappers for all backend API endpoints.
+ * Supports v2 schema with rich element types for Advanced RAG chunking.
  */
 
-export interface JobSummary {
-  job_id: string
-  filename: string
-  status: 'pending' | 'running' | 'completed' | 'failed'
-  page_count: number | null
-  languages_detected: string[]
-  error_message: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface JobListResponse {
-  total: number
-  page: number
-  limit: number
-  items: JobSummary[]
-}
+export type ElementType =
+  | 'title' | 'section_header' | 'text' | 'table' | 'image' | 'figure'
+  | 'list' | 'list_item' | 'caption' | 'footnote' | 'formula'
+  | 'page_header' | 'page_footer' | 'code' | 'reference'
 
 export interface ResultElement {
-  type: 'text' | 'table' | 'image'
+  element_id: string
+  type: ElementType
+  hierarchy_level?: number
   content: string
-  language?: string
+  page_number: number
+  reading_order: number
   bbox?: [number, number, number, number]
+  language?: string
+  parent_id?: string
+  parent_section?: string
+  label?: string
+  // Table-specific
   rows?: string[][]
+  num_rows?: number
+  num_cols?: number
+  caption_id?: string
+  markdown_table?: string
+  // Image-specific
   path?: string
+  // List-specific
+  list_id?: string
+  // Formula-specific
+  content_latex?: string
+  // Caption-specific
+  refers_to_id?: string
+}
+
+export interface TocEntry {
+  level: number
+  text: string
+  page_number: number
+  element_id: string
+}
+
+export interface ChunkMetadata {
+  start_page: number
+  end_page: number
+  has_table: boolean
+  has_image: boolean
+  languages: string[]
+}
+
+export interface Chunk {
+  chunk_id: string
+  strategy: 'hierarchical' | 'semantic' | 'hybrid'
+  content: string
+  token_estimate: number
+  element_ids: string[]
+  page_numbers: number[]
+  section_path: string[]
+  metadata: ChunkMetadata
+}
+
+export interface ChunksResponse {
+  job_id: string
+  strategy: string
+  chunks: Chunk[] | Record<string, Chunk[]>
 }
 
 export interface ResultPage {
@@ -39,11 +78,41 @@ export interface ResultMetadata {
   languages: string[]
   has_tables: boolean
   has_images: boolean
+  has_equations?: boolean
+  has_code?: boolean
+  title?: string | null
 }
 
 export interface ParsedResult {
+  schema_version?: string
   pages: ResultPage[]
+  elements?: ResultElement[]
+  toc?: TocEntry[]
   metadata: ResultMetadata
+  chunks?: Record<'hierarchical' | 'semantic' | 'hybrid', Chunk[]>
+}
+
+export interface JobSummary {
+  job_id: string
+  filename: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  page_count: number | null
+  languages_detected: string[]
+  doc_title?: string | null
+  element_count?: number | null
+  chunk_count?: number | null
+  has_equations?: boolean | null
+  has_code?: boolean | null
+  error_message: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface JobListResponse {
+  total: number
+  page: number
+  limit: number
+  items: JobSummary[]
 }
 
 export interface UploadResponse {
@@ -87,12 +156,39 @@ export async function getResult(jobId: string): Promise<ParsedResult> {
   return apiFetch<ParsedResult>(`/api/jobs/${jobId}/result`)
 }
 
+export async function getChunks(jobId: string, strategy?: string): Promise<ChunksResponse> {
+  const url = strategy
+    ? `/api/jobs/${jobId}/chunks?strategy=${encodeURIComponent(strategy)}`
+    : `/api/jobs/${jobId}/chunks`
+  return apiFetch<ChunksResponse>(url)
+}
+
+export async function getToc(jobId: string): Promise<{ job_id: string; toc: TocEntry[] }> {
+  return apiFetch<{ job_id: string; toc: TocEntry[] }>(`/api/jobs/${jobId}/toc`)
+}
+
+export async function getElements(
+  jobId: string,
+  params?: { type?: string; page?: number; exclude_headers?: boolean }
+): Promise<{ job_id: string; total: number; elements: ResultElement[] }> {
+  const searchParams = new URLSearchParams()
+  if (params?.type) searchParams.set('type', params.type)
+  if (params?.page != null) searchParams.set('page', String(params.page))
+  if (params?.exclude_headers) searchParams.set('exclude_headers', 'true')
+  const qs = searchParams.toString()
+  return apiFetch(`/api/jobs/${jobId}/elements${qs ? `?${qs}` : ''}`)
+}
+
 export async function deleteJob(jobId: string): Promise<void> {
   await apiFetch<unknown>(`/api/jobs/${jobId}`, { method: 'DELETE' })
 }
 
 export function getDownloadUrl(jobId: string, format: 'json' | 'markdown' | 'text'): string {
   return `/api/jobs/${jobId}/download/${format}`
+}
+
+export function getChunksDownloadUrl(jobId: string): string {
+  return `/api/jobs/${jobId}/download/chunks`
 }
 
 export function getImageUrl(jobId: string, filename: string): string {
