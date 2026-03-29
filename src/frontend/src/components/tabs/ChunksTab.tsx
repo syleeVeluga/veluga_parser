@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { getChunks, getChunksDownloadUrl, type Chunk } from '../../services/api'
+import { useState, useEffect, useCallback } from 'react'
+import { getChunks, getChunksDownloadUrl, reprocessJob, type Chunk } from '../../services/api'
 
 type Strategy = 'hierarchical' | 'semantic' | 'hybrid'
 
@@ -77,18 +77,27 @@ export function ChunksTab({ jobId }: ChunksTabProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [noChunksAvailable, setNoChunksAvailable] = useState(false)
+  const [reprocessing, setReprocessing] = useState(false)
 
-  useEffect(() => {
+  const fetchChunks = useCallback(() => {
     setLoading(true)
+    setNoChunksAvailable(false)
     getChunks(jobId)
       .then(data => {
         const all = data.chunks as Record<Strategy, Chunk[]>
+        const isEmpty = !all.hierarchical?.length && !all.semantic?.length && !all.hybrid?.length
+        if (isEmpty) {
+          setNoChunksAvailable(true)
+        }
         setAllChunks(all)
         setError(null)
       })
       .catch(err => setError(err instanceof Error ? err.message : 'Failed to load chunks'))
       .finally(() => setLoading(false))
   }, [jobId])
+
+  useEffect(() => { fetchChunks() }, [fetchChunks])
 
   useEffect(() => {
     setChunks(allChunks[strategy] ?? [])
@@ -98,8 +107,55 @@ export function ChunksTab({ jobId }: ChunksTabProps) {
     ? chunks.filter(c => c.content.toLowerCase().includes(search.toLowerCase()))
     : chunks
 
+  const handleReprocess = async () => {
+    setReprocessing(true)
+    try {
+      await reprocessJob(jobId)
+      // Poll until job completes, then reload chunks
+      const poll = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/jobs/${jobId}`)
+          if (!res.ok) return
+          const job = await res.json()
+          if (job.status === 'completed' || job.status === 'failed') {
+            clearInterval(poll)
+            setReprocessing(false)
+            fetchChunks()
+          }
+        } catch { /* keep polling */ }
+      }, 2000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Reprocess failed')
+      setReprocessing(false)
+    }
+  }
+
   if (loading) return <div className="p-4 text-gray-500 text-sm">Loading chunks...</div>
   if (error) return <div className="p-4 text-red-600 text-sm">{error}</div>
+  if (reprocessing) return (
+    <div className="p-4 flex items-center gap-2 text-sm text-blue-600">
+      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+      </svg>
+      Reprocessing... this may take a moment
+    </div>
+  )
+  if (noChunksAvailable) return (
+    <div className="p-4">
+      <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+        <p className="text-sm text-blue-800 mb-3">
+          This job was processed before chunking was available. Reprocess the job to generate chunks, or re-upload the PDF.
+        </p>
+        <button
+          onClick={handleReprocess}
+          className="px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+        >
+          Reprocess Job
+        </button>
+      </div>
+    </div>
+  )
 
   return (
     <div className="p-4 h-full flex flex-col gap-3">
