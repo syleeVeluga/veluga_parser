@@ -10,6 +10,10 @@ import {
   MOCK_MARKDOWN,
   MOCK_PLAINTEXT,
   MOCK_UPLOAD_RESPONSE,
+  MOCK_MARKDOWN_PAGES,
+  MOCK_MARKDOWN_PAGE_1,
+  MOCK_MARKDOWN_PAGE_2,
+  MOCK_MARKDOWN_PAGE_3,
 } from './fixtures'
 
 /** Set up API route mocks for all /api/* endpoints */
@@ -63,6 +67,23 @@ export async function mockAllApis(page: Page) {
   // Structure
   await page.route('**/api/jobs/*/structure', route =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_STRUCTURE) }),
+  )
+
+  // Markdown pages — single-page mock must be registered BEFORE the pages-list mock
+  await page.route('**/api/jobs/*/markdown/pages/*', route => {
+    const url = route.request().url()
+    const match = url.match(/\/markdown\/pages\/(\d+)/)
+    const pageNum = match ? parseInt(match[1], 10) : 1
+    const fixtures: Record<number, typeof MOCK_MARKDOWN_PAGE_1> = {
+      1: MOCK_MARKDOWN_PAGE_1,
+      2: MOCK_MARKDOWN_PAGE_2,
+      3: MOCK_MARKDOWN_PAGE_3,
+    }
+    const body = fixtures[pageNum] ?? { ...MOCK_MARKDOWN_PAGE_1, page_number: pageNum }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  })
+  await page.route('**/api/jobs/*/markdown/pages', route =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_MARKDOWN_PAGES) }),
   )
 
   // Downloads

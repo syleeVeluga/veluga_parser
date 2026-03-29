@@ -135,3 +135,30 @@ export const MOCK_UPLOAD_RESPONSE = {
 
 export const MOCK_MARKDOWN = '# Parsed Document\n\nSample body text for testing.\n'
 export const MOCK_PLAINTEXT = 'Parsed Document\nSample body text for testing.\n'
+
+export const MOCK_MARKDOWN_PAGES = {
+  job_id: 'job-001',
+  total_pages: 3,
+  pages: [1, 2, 3],
+}
+
+export const MOCK_MARKDOWN_PAGE_1 = {
+  job_id: 'job-001',
+  page_number: 1,
+  total_pages: 3,
+  content: '# Parsed Document\n\nSample body text for testing.\n',
+}
+
+export const MOCK_MARKDOWN_PAGE_2 = {
+  job_id: 'job-001',
+  page_number: 2,
+  total_pages: 3,
+  content: '## Section Two\n\nContent on page two.\n',
+}
+
+export const MOCK_MARKDOWN_PAGE_3 = {
+  job_id: 'job-001',
+  page_number: 3,
+  total_pages: 3,
+  content: '## Section Three\n\nContent on page three.\n',
+}
