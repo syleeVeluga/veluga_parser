@@ -1,229 +1,303 @@
-# Feature Spec: Advanced RAG Chunking — Rich Metadata Extraction via Docling
+# Feature Spec: Side Panel UI Overhaul
 
 ## Overview
 
-Enhance Veluga Parser to extract the full semantic structure of PDFs using Docling's native element model (no VLM, no external APIs). The output becomes a rich, element-typed document graph — title, subtitles, section hierarchy, body text, tables, figures, lists, equations, captions, footnotes, page headers/footers, page numbers, reading order, and a table of contents — stored in a new wire format purpose-built for Advanced RAG chunking. The architecture mirrors MinerU in spirit: a local, cost-zero pipeline that produces RAG-ready JSON with enough metadata to support any chunking strategy downstream.
+Replace the current two-page layout (HomePage with job list + separate JobDetailPage) with a single-page application shell featuring a collapsible left sidebar for document navigation and a main content area for document viewing. This eliminates page transitions, lets users switch between documents instantly, and makes better use of screen real estate.
 
 ---
 
-## Current State (Baseline)
+## Current State
 
-### Parser (`src/backend/services/parser.py`)
-- Docling version: **2.82.0**
-- Uses `DocumentConverter` with `PyPdfiumDocumentBackend`
-- Iterates `doc.iterate_items()` and classifies only three types: `TextItem`, `TableItem`, `PictureItem`
-- All `TextItem`s are collapsed to a single `type: "text"` — no distinction between titles, headers, body, captions, footnotes, list items, or equations
-- No hierarchy level captured (`level` from `iterate_items()` is ignored)
+### Architecture
+- **Two pages**: `HomePage` (upload zone + job list table) and `JobDetailPage` (metadata + split pane viewer)
+- **Routing**: `react-router-dom` with `/` and `/jobs/:jobId` routes
+- **Layout**: `Layout.tsx` wraps both pages with a top header bar
+- **Viewer**: `SplitPaneViewer` splits 50/50 between `PdfPane` (left) and `OutputPane` (right, 6 tabs)
+- **Components**: `UploadZone`, `JobList`, `JobStatusBadge`, `DownloadButtons`, `TocSidebar`, `PdfPane`, `OutputPane`, 6 tab components
 
-### Output format (v1)
-```json
-{
-  "pages": [{"page_number": 1, "elements": [...]}],
-  "metadata": {"total_pages": 5, "languages": ["en", "ko"], "has_tables": true, "has_images": false}
-}
-```
-
-### DB schema
-- `jobs`: id, filename, file_path, file_hash, status, error_message, page_count, languages_detected, created_at, updated_at, deleted_at
-- `parsed_results`: id, job_id, result_json, markdown_path, text_path, json_path, image_dir, created_at
+### Pain Points
+- Navigating from job list to job detail requires a full page transition
+- The header + metadata section consumes significant vertical space, reducing viewer area
+- No way to quickly compare or switch between parsed documents
+- The job list table is wide but the data is simple; a compact sidebar list would suffice
 
 ---
 
-## New Output Format (v2)
+## Feature Requirements
 
-```json
-{
-  "schema_version": "2.0",
-  "metadata": {
-    "total_pages": 12,
-    "languages": ["en", "ko"],
-    "has_tables": true,
-    "has_images": true,
-    "has_equations": false,
-    "has_code": false,
-    "title": "Deep Learning for NLP",
-    "authors": [],
-    "page_dimensions": [{"page_number": 1, "width": 595.0, "height": 842.0}]
-  },
-  "toc": [{"level": 1, "text": "Introduction", "page_number": 2, "element_id": "elem_0007"}],
-  "elements": [...],
-  "pages": [...],
-  "chunks": {
-    "hierarchical": [...],
-    "semantic": [...],
-    "hybrid": [...]
-  }
-}
+### Must-Have
+- [ ] **Collapsible left sidebar** (~280px default width) containing:
+  - App logo/title (compact)
+  - Upload button (always visible at top of sidebar)
+  - Scrollable document list with filename, status badge, and date
+  - Active document highlighting
+  - Delete action per document
+- [ ] **Main content area** that fills remaining viewport width, containing:
+  - Compact metadata bar (single row: filename, status, page/element/chunk counts, download buttons, reprocess)
+  - Full-height `SplitPaneViewer` below the metadata bar
+  - Processing spinner and error states when job is not yet completed
+- [ ] **Sidebar toggle button** to collapse/expand the sidebar (hamburger icon or chevron)
+- [ ] **Collapsed sidebar state**: shows only icons (upload icon, narrow document indicators) at ~48px width
+- [ ] **URL sync**: selected job ID reflected in URL (`/jobs/:jobId`) for bookmarkability; bare `/` shows sidebar with no document selected
+- [ ] **Empty state**: when no document is selected, main area shows a centered prompt ("Select a document or upload a PDF")
+- [ ] **Keyboard shortcut**: `Ctrl+B` / `Cmd+B` to toggle sidebar
+- [ ] **Responsive behavior**: on screens below 768px, sidebar overlays as a drawer instead of pushing content
+- [ ] **Preserve all existing functionality**: upload, polling, reprocess, download (JSON/MD/text/chunks), all 6 output tabs, PDF viewer with page navigation
+
+### Nice-to-Have
+- [ ] Sidebar width resizable via drag handle
+- [ ] Search/filter input in sidebar to filter documents by filename
+- [ ] Sidebar document list shows a tiny progress indicator for pending/running jobs
+- [ ] Smooth CSS transitions for sidebar collapse/expand (200ms ease)
+- [ ] Remember sidebar collapsed state in `localStorage`
+
+---
+
+## Technical Design
+
+### Data Models
+No backend changes required. All API endpoints remain identical. This is a frontend-only overhaul.
+
+### API Endpoints
+No new endpoints. Existing endpoints used:
+| Method | Path | Used By |
+|--------|------|---------|
+| GET | /api/jobs | Sidebar document list |
+| GET | /api/jobs/:id | Selected document status polling |
+| POST | /api/upload | Upload button in sidebar |
+| DELETE | /api/jobs/:id | Delete from sidebar list |
+| POST | /api/jobs/:id/reprocess | Reprocess button in metadata bar |
+| GET | /api/jobs/:id/result | Output tabs |
+| GET | /api/jobs/:id/pdf | PDF viewer |
+| GET | /api/jobs/:id/chunks | Chunks tab |
+| GET | /api/jobs/:id/toc | Structure tab |
+| GET | /api/jobs/:id/elements | Structure tab |
+| GET | /api/jobs/:id/structure | Analysis tab |
+| GET | /api/jobs/:id/download/* | Download buttons |
+
+### UI Layout
+
+```
++--+----------------------------------------------+
+|S | Main Content Area                             |
+|I |                                               |
+|D | [Metadata Bar: filename | status | counts |   |
+|E |  downloads | reprocess]                       |
+|B |                                               |
+|A | +-------------------++-----------------------+|
+|R | | PDF Viewer        || Output Tabs           ||
+|  | |                   ||                       ||
+|  | |                   || [MD|JSON|TXT|STR|CHK| ||
+|  | |                   ||  ANL]                 ||
+|  | |                   ||                       ||
+|  | +-------------------++-----------------------+|
++--+----------------------------------------------+
 ```
 
-### Element object (v2)
-```json
-{
-  "element_id": "elem_0042",
-  "type": "section_header",
-  "hierarchy_level": 2,
-  "content": "3.2 Experimental Setup",
-  "page_number": 5,
-  "reading_order": 42,
-  "bbox": [72.0, 310.5, 524.0, 328.0],
-  "language": "en",
-  "parent_id": "elem_0031",
-  "parent_section": "3. Experiments",
-  "label": "SECTION_HEADER"
-}
+**Sidebar (expanded, ~280px)**:
+```
++---------------------------+
+| [Logo] Veluga Parser  [<] |
+|---------------------------|
+| [+ Upload PDF]            |
+|---------------------------|
+| Documents                 |
+|  report.pdf        ✓ 3/28|
+|  > invoice_kr.pdf  ✓ 3/27|  <- active (highlighted)
+|  analysis.pdf      ⏳ 3/27|
+|  memo.pdf          ✗ 3/26|
+|                           |
++---------------------------+
 ```
 
-### Element types
-| `type` | Docling source |
-|--------|---------------|
-| `title` | DocItemLabel.TITLE |
-| `section_header` | DocItemLabel.SECTION_HEADER |
-| `text` | DocItemLabel.TEXT |
-| `table` | TableItem |
-| `image` | PictureItem |
-| `figure` | DocItemLabel.FIGURE |
-| `list` | DocItemLabel.LIST |
-| `list_item` | DocItemLabel.LIST_ITEM |
-| `caption` | DocItemLabel.CAPTION |
-| `footnote` | DocItemLabel.FOOTNOTE |
-| `formula` | DocItemLabel.FORMULA |
-| `page_header` | DocItemLabel.PAGE_HEADER |
-| `page_footer` | DocItemLabel.PAGE_FOOTER |
-| `code` | DocItemLabel.CODE |
-| `reference` | DocItemLabel.REFERENCE |
-
-### Chunk objects
-```json
-{
-  "chunk_id": "hc_003",
-  "strategy": "hierarchical",
-  "content": "3.2 Experimental Setup\n\nWe trained on ...",
-  "token_estimate": 312,
-  "element_ids": ["elem_0042", "elem_0043"],
-  "page_numbers": [5, 6],
-  "section_path": ["3. Experiments", "3.2 Experimental Setup"],
-  "metadata": {"start_page": 5, "end_page": 6, "has_table": false, "has_image": false, "languages": ["en"]}
-}
+**Sidebar (collapsed, ~48px)**:
 ```
++----+
+| [>]|
+| [+]|
+|----|
+| R  |
+| >I |  <- active indicator
+| A  |
+| M  |
++----+
+```
+
+### Component Changes
+
+#### New Components
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| `AppShell` | `components/AppShell.tsx` | Top-level layout: sidebar + main area, manages sidebar state |
+| `Sidebar` | `components/Sidebar.tsx` | Collapsible sidebar with logo, upload, document list |
+| `SidebarDocList` | `components/SidebarDocList.tsx` | Scrollable list of documents with status, date, delete |
+| `SidebarDocItem` | `components/SidebarDocItem.tsx` | Single document row in sidebar |
+| `MetadataBar` | `components/MetadataBar.tsx` | Compact single-row metadata + download + reprocess |
+| `MainContent` | `components/MainContent.tsx` | Selected document viewer area (metadata bar + split pane) |
+| `EmptyState` | `components/EmptyState.tsx` | Centered prompt when no document selected |
+
+#### Modified Components
+| Component | Changes |
+|-----------|---------|
+| `Layout.tsx` | Replace with `AppShell` as the root layout (or refactor in-place) |
+| `UploadZone.tsx` | Create a compact variant for sidebar use (smaller, no large icon) |
+| `SplitPaneViewer.tsx` | Remove hardcoded `calc(100vh - 180px)` height; use `h-full` flex child |
+| `main.tsx` | Update routing: single route with `AppShell`, jobId as optional param |
+
+#### Removed/Deprecated
+| Component | Reason |
+|-----------|--------|
+| `HomePage.tsx` | Functionality absorbed into sidebar + empty state |
+| `JobDetailPage.tsx` | Functionality absorbed into `MainContent` |
+| `JobList.tsx` | Replaced by `SidebarDocList` (compact format, no table) |
+
+### State Management
+- `AppShell` holds: `sidebarCollapsed: boolean`, `selectedJobId: string | null`
+- `selectedJobId` syncs with URL via `useParams` + `useNavigate`
+- Sidebar document list uses existing `listJobs` API with auto-refresh polling
+- Selected document uses existing `useJobStatus` hook
+- Sidebar collapsed state optionally persisted to `localStorage`
+
+### Routing Changes
+```typescript
+// Before
+{ path: '/', element: <Layout />, children: [
+  { index: true, element: <HomePage /> },
+  { path: 'jobs/:jobId', element: <JobDetailPage /> },
+]}
+
+// After
+{ path: '/', element: <AppShell />, children: [
+  { index: true, element: <MainContent /> },
+  { path: 'jobs/:jobId', element: <MainContent /> },
+]}
+```
+
+`MainContent` reads `jobId` from `useParams()`. If absent, renders `EmptyState`. If present, renders metadata bar + split pane viewer.
 
 ---
 
 ## Sprint Plan
 
-### Sprint 1: Rich Element Extraction (Parser Rewrite)
+### Sprint 5: Side Panel UI Overhaul (Frontend Restructure)
 
-**Goal:** Rewrite `parse_pdf()` to produce the v2 element schema using all Docling label types.
+**Goal**: Replace the two-page layout with a sidebar-based single-page shell. All existing functionality preserved.
 
-**Files changed:**
-- `src/backend/services/parser.py` — complete rewrite
-- `tests/unit/test_parser.py` — extended with new element type tests
+**Scope**:
+1. Create `AppShell` component with sidebar + main content layout
+2. Create `Sidebar` component (collapsible, logo, upload button, document list)
+3. Create `SidebarDocList` and `SidebarDocItem` (compact document list with status, delete, active state)
+4. Create compact upload variant for sidebar
+5. Create `MetadataBar` (single-row: filename, status badge, page/element/chunk counts, downloads, reprocess)
+6. Create `MainContent` component (reads jobId from URL, shows empty state or viewer)
+7. Create `EmptyState` component
+8. Update `SplitPaneViewer` to use flex-based height instead of hardcoded calc
+9. Update `main.tsx` routing
+10. Remove or archive `HomePage.tsx`, `JobDetailPage.tsx`, `JobList.tsx`
+11. Sidebar collapse/expand with toggle button and `Ctrl+B` / `Cmd+B`
+12. Responsive: sidebar becomes overlay drawer below 768px
+13. CSS transitions for sidebar open/close (200ms)
+14. Persist sidebar state in `localStorage`
 
-**Key implementation:**
-1. Replace `isinstance` branch with `DocItemLabel`-based dispatch table
-2. Capture `reading_order` counter (sequential from `iterate_items`)
-3. For `SectionHeaderItem`, read `.level` attribute → `hierarchy_level`
-4. Assign `element_id` as `f"elem_{reading_order:04d}"`
-5. Build running `section_stack` for `parent_id` / `parent_section` tracking
-6. Collect `toc_entries` from all `section_header` and `title` elements
-7. Caption linking: second pass to link captions to preceding table/image
-8. `pages` array derived from `elements` (backward compat)
-9. `chunks` is empty dict (filled Sprint 2)
+**Success Criteria**:
+- [ ] App loads with sidebar visible showing document list
+- [ ] Clicking a document in sidebar loads it in main content area without page navigation
+- [ ] Upload button in sidebar triggers file picker; after upload, new job appears in list and is auto-selected
+- [ ] Sidebar collapse/expand works via button and keyboard shortcut
+- [ ] All 6 output tabs render correctly for a completed job
+- [ ] PDF viewer renders and page navigation works
+- [ ] Download buttons (JSON, Markdown, Text, Chunks) work
+- [ ] Reprocess button works
+- [ ] Delete from sidebar removes document from list
+- [ ] Empty state shown when no document selected
+- [ ] URL reflects selected document (`/jobs/:jobId`)
+- [ ] Direct navigation to `/jobs/:jobId` selects that document
+- [ ] Responsive: below 768px sidebar is an overlay drawer
+- [ ] `npm run build` succeeds with zero TypeScript errors
+- [ ] `npm run lint` passes with zero warnings
 
-**Success criteria:**
-1. Returns `schema_version: "2.0"` on any PDF
-2. Elements have `element_id`, `type`, `reading_order`, `page_number`, `bbox`
-3. All 15 element type values produced from Docling labels
-4. `hierarchy_level` set on `section_header` and `title`
-5. `parent_section` set correctly for body elements
-6. `toc` non-empty for PDFs with section headers
-7. `metadata.title` populated from first `title` element
-8. `pages` array present (backward compat)
-9. `chunks` present as empty dict
-10. All existing tests pass
+**Files to create**:
+- `src/frontend/src/components/AppShell.tsx`
+- `src/frontend/src/components/Sidebar.tsx`
+- `src/frontend/src/components/SidebarDocList.tsx`
+- `src/frontend/src/components/SidebarDocItem.tsx`
+- `src/frontend/src/components/MetadataBar.tsx`
+- `src/frontend/src/components/MainContent.tsx`
+- `src/frontend/src/components/EmptyState.tsx`
 
----
+**Files to modify**:
+- `src/frontend/src/main.tsx` (routing)
+- `src/frontend/src/components/SplitPaneViewer.tsx` (height fix)
+- `src/frontend/src/components/UploadZone.tsx` (add compact variant prop)
 
-### Sprint 2: Chunker Service + New API Endpoints
-
-**Goal:** Implement three chunking strategies; wire into pipeline; add new endpoints; update DB schema.
-
-**Files changed:**
-- `src/backend/services/chunker.py` — new
-- `src/backend/services/exporter.py` — add chunks export
-- `src/backend/routes/results.py` — add /chunks, /toc, /elements, /download/chunks
-- `src/backend/routes/upload.py` — call chunker, store enriched metadata
-- `src/backend/models/job.py` — add doc_title, element_count, chunk_count, has_equations, has_code
-- `src/backend/models/result.py` — add schema_version, chunks_json, toc_json, element_count
-- `src/backend/database.py` — idempotent ALTER TABLE migrations
-- `tests/unit/test_chunker.py` — new
-- `tests/integration/test_api.py` — extend
-
-**Chunking strategies:**
-1. **Hierarchical** — one chunk per section, anchored by section_header
-2. **Semantic** — tables/figures/formulas as atomic chunks; prose grouped separately
-3. **Hybrid** — hierarchical first, then split oversized sections at paragraph boundaries (max 512 tokens)
-
-**New API endpoints:**
-- `GET /api/jobs/{job_id}/chunks?strategy=hierarchical|semantic|hybrid`
-- `GET /api/jobs/{job_id}/toc`
-- `GET /api/jobs/{job_id}/elements?type=...&page=...&exclude_headers=true`
-- `GET /api/jobs/{job_id}/download/chunks`
-
-**DB additions (idempotent ALTER TABLE):**
-- jobs: `doc_title`, `element_count`, `chunk_count`, `has_equations`, `has_code`
-- parsed_results: `schema_version`, `chunks_json`, `toc_json`, `element_count`
-
-**Success criteria:**
-1. `/result` returns v2 with `chunks` object (3 strategy keys)
-2. `/chunks` returns 200 with chunk array
-3. `/chunks?strategy=hierarchical` filters correctly
-4. `/toc` returns TOC array
-5. `/elements?type=section_header` filters correctly
-6. `/elements?exclude_headers=true` excludes page_header/page_footer
-7. `/download/chunks` returns downloadable JSON
-8. Job list includes `doc_title`, `element_count`, `chunk_count`
-9. Each chunk has all required fields
-10. Hybrid chunks <= 512 tokens (unless single atomic element exceeds limit)
-11. All tests pass
+**Files to remove/archive**:
+- `src/frontend/src/pages/HomePage.tsx`
+- `src/frontend/src/pages/JobDetailPage.tsx`
+- `src/frontend/src/components/Layout.tsx` (replaced by AppShell)
+- `src/frontend/src/components/JobList.tsx` (replaced by SidebarDocList)
 
 ---
 
-### Sprint 3: Frontend Rich Structure Viewer + Chunk Explorer
+### Sprint 6: Playwright E2E Test Suite
 
-**Goal:** Update frontend to display v2 structure. Add Chunks tab, hierarchy-aware element rendering, TOC sidebar.
+**Goal**: Comprehensive Playwright E2E tests covering the new sidebar UI and all user flows.
 
-**Files changed:**
-- `src/frontend/src/services/api.ts` — update types + new functions
-- `src/frontend/src/components/ResultsViewer.tsx` — new element type renderers
-- `src/frontend/src/components/tabs/StructuredTab.tsx` — rename to Structure, add TOC
-- `src/frontend/src/components/tabs/ChunksTab.tsx` — new
-- `src/frontend/src/components/TocSidebar.tsx` — new
-- `src/frontend/src/components/OutputPane.tsx` — add Chunks tab
-- `src/frontend/src/components/DownloadButtons.tsx` — add Chunks JSON button
+**Scope**:
+1. Install and configure Playwright in the frontend project
+2. Create Playwright config (`playwright.config.ts`) with:
+   - Base URL pointing to dev server
+   - Chromium browser (single browser sufficient for E2E)
+   - Screenshot on failure
+   - Video recording on retry
+3. Write E2E tests for all critical user flows:
+   - **Sidebar navigation**: sidebar renders, document list loads, clicking selects document
+   - **Sidebar collapse/expand**: toggle button works, keyboard shortcut works, state persists
+   - **Upload flow**: upload button opens file picker, after upload job appears in sidebar
+   - **Document viewer**: metadata bar shows correct data, PDF pane renders, output tabs switch
+   - **Download buttons**: download links have correct hrefs
+   - **Reprocess**: reprocess button triggers API call
+   - **Delete**: delete with confirmation removes document from sidebar
+   - **Empty state**: no document selected shows empty state prompt
+   - **URL sync**: direct navigation to `/jobs/:id` loads correct document
+   - **Responsive**: sidebar becomes drawer on narrow viewport
+4. Add npm scripts for running Playwright tests
+5. Ensure tests can run in CI (headless mode)
 
-**Success criteria:**
-1. ChunksTab renders chunks for all 3 strategies
-2. Strategy selector switches chunk list
-3. section_path breadcrumb displayed on chunks
-4. TocSidebar shows TOC; clicking navigates to page
-5. SectionHeaderElement renders h1/h2/h3 visually
-6. page_header/page_footer collapsed by default
-7. Chunk search filters in real time
-8. Chunks JSON download works
-9. doc_title in JobList and JobDetailPage
-10. No TypeScript errors (`tsc --noEmit`)
+**Success Criteria**:
+- [ ] `npx playwright install` completes (Chromium)
+- [ ] `npx playwright test` runs and all tests pass
+- [ ] Tests cover: sidebar render, document selection, collapse/expand, upload flow, tab switching, download links, delete, empty state, URL navigation, responsive drawer
+- [ ] Test failures produce screenshots for debugging
+- [ ] Tests run in under 60 seconds total
+- [ ] No flaky tests (tests use proper `waitFor` / `expect` patterns, no arbitrary sleeps)
+
+**Files to create**:
+- `src/frontend/playwright.config.ts`
+- `src/frontend/e2e/sidebar.spec.ts` (sidebar render, collapse, expand, keyboard shortcut)
+- `src/frontend/e2e/document-viewer.spec.ts` (select document, metadata, tabs, PDF)
+- `src/frontend/e2e/upload-delete.spec.ts` (upload flow, delete flow)
+- `src/frontend/e2e/navigation.spec.ts` (URL sync, empty state, responsive)
+
+**Files to modify**:
+- `src/frontend/package.json` (add Playwright dev dependency, add `test:e2e` script)
 
 ---
 
 ## Risks & Dependencies
-- Docling label availability in 2.82.0 — verify imports before use
-- `SectionHeaderItem.level` attribute — guard with hasattr/try-except
-- `doc.pages` dict availability — guard with hasattr
-- Large result_json size — mitigated by separate chunks_json column
-- Caption linking heuristic — best-effort, not guaranteed for all PDFs
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| `react-split` may not behave well when sidebar resizes the available width | Viewer layout breaks on toggle | Use CSS `transition` on sidebar width; `SplitPaneViewer` already uses `ResizeObserver` in `PdfPane` |
+| Sidebar document list polling may conflict with `useJobStatus` polling for selected doc | Duplicate API calls | Sidebar polls `listJobs` (lightweight); selected doc polls `getJob` (single job). No conflict — different endpoints |
+| Removing `HomePage` and `JobDetailPage` is a breaking change to existing bookmarks | Users with bookmarked `/` or `/jobs/:id` see errors | Both routes still exist in new routing; `/` shows sidebar + empty state, `/jobs/:id` shows sidebar + selected doc |
+| Playwright tests need a running backend with test data | Tests fail in CI without backend | Use Playwright `route` API to mock all `/api/*` endpoints with fixture data; no real backend needed |
+| `react-pdf` worker initialization may fail in Playwright | PDF tests flaky | Mock the PDF pane in E2E tests or skip PDF rendering assertions; focus on metadata and tab tests |
+| Responsive overlay drawer needs click-outside-to-close and focus trap | Accessibility issues | Use `useEffect` with `mousedown` listener for click-outside; aria attributes for drawer |
 
 ## Tech Stack Decisions
-- No VLM, no external API calls
-- Token estimation: `round(len(content.split()) * 1.3)` — no tokenizer dependency
-- Chunking runs synchronously in _run_parse_job (fast, <1s for most docs)
-- `pages` array preserved for full backward compat throughout all sprints
+
+- **No new runtime dependencies**: The sidebar is built with Tailwind CSS utility classes and existing React primitives
+- **Playwright** (not Cypress) for E2E tests as specified in project conventions
+- **API mocking in Playwright**: Use `page.route()` to intercept API calls with fixture JSON, keeping tests fast and deterministic
+- **No state management library**: `useState` + URL params + context (if needed) is sufficient for sidebar state
+- **localStorage** for sidebar collapsed preference only

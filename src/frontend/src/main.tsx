@@ -2,17 +2,16 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import './styles/index.css'
-import { Layout } from './components/Layout'
-import { HomePage } from './pages/HomePage'
-import { JobDetailPage } from './pages/JobDetailPage'
+import { AppShell } from './components/AppShell'
+import { MainContent } from './components/MainContent'
 
 const router = createBrowserRouter([
   {
     path: '/',
-    element: <Layout />,
+    element: <AppShell />,
     children: [
-      { index: true, element: <HomePage /> },
-      { path: 'jobs/:jobId', element: <JobDetailPage /> },
+      { index: true, element: <MainContent /> },
+      { path: 'jobs/:jobId', element: <MainContent /> },
     ],
   },
 ])

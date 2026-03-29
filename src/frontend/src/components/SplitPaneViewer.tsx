@@ -9,10 +9,7 @@ interface SplitPaneViewerProps {
 
 export function SplitPaneViewer({ jobId, filename }: SplitPaneViewerProps) {
   return (
-    <div
-      className="w-full overflow-hidden"
-      style={{ height: 'calc(100vh - 180px)' }}
-    >
+    <div className="w-full h-full overflow-hidden">
       <Split
         className="flex h-full"
         sizes={[50, 50]}
