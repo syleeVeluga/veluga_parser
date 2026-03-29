@@ -1,146 +1,102 @@
-# Sprint 5 Evaluation Report: TypeScript 5 → 6
+# Evaluation Report — Delete/Trash Finished Jobs Feature
 
 **Date:** 2026-03-29
 **Evaluator:** Claude Code (Evaluator Agent)
-**Sprint:** Sprint 5 — TypeScript 5 → 6 Upgrade
+**Feature:** Delete/Trash Finished Jobs
 
 ---
 
-## Commands Run
-
-All commands executed from working directory: `d:/dev/veluga_parser/src/frontend`
-
----
-
-## SC-1: package.json lists `typescript: "^6.0.0"`
-
-**Command:**
-```bash
-grep '"typescript"' package.json
-```
-
-**Output:**
-```
-    "typescript": "^6.0.0",
-```
-
-**Installed version confirmed:** TypeScript 6.0.2 (via `tsc --version`)
-
-**Result: PASS**
+## Scores
+| Category | Score (0-100) | Weight | Weighted Score |
+|----------|--------------|--------|---------------|
+| Functionality | 95 | 30% | 28.5 |
+| Code Quality | 90 | 25% | 22.5 |
+| Testing | 75 | 20% | 15.0 |
+| Security | 88 | 15% | 13.2 |
+| UI/UX | 92 | 10% | 9.2 |
+| **Total** | | | **88.4** |
 
 ---
 
-## SC-2: `npm install` completes (--legacy-peer-deps acceptable)
+## Contract Item Results
 
-**Command:**
-```bash
-npm install --legacy-peer-deps 2>&1 | tail -3
-```
+- [PASS] **Criterion 1**: `DELETE /api/jobs/{job_id}` returns 200 for a completed/failed job.
+  - Evidence: Live runtime test — forced job to `completed` state, DELETE returned HTTP 200 with `{"job_id": "...", "status": "deleted"}`. Forced to `failed`, same 200 result. Code path: `routes/jobs.py` lines 67–76.
 
-**Output:**
-```
-  run `npm fund` for details
+- [PASS] **Criterion 2**: After deletion, `GET /api/jobs/{job_id}` returns 404.
+  - Evidence: Live runtime test confirmed 404 after soft-delete. `get_job` filters `Job.deleted_at.is_(None)` (line 61 of `routes/jobs.py`).
 
-found 0 vulnerabilities
-```
+- [PASS] **Criterion 3**: `GET /api/jobs` does not include deleted jobs in results.
+  - Evidence: Live runtime test — deleted job absent from list response. `list_jobs` filters `Job.deleted_at.is_(None)` (line 48 of `routes/jobs.py`).
 
-Install completed successfully with `--legacy-peer-deps` (expected due to typescript-eslint@8.x peer dep cap at TS<6.0.0, as documented in contract).
+- [PASS] **Criterion 4**: `DELETE` on a pending/running job returns 400.
+  - Evidence: Live runtime test — forced job to `pending`, DELETE returned 400 `"Cannot delete a job that is still in progress"`; forced to `running`, same 400. Code path: `routes/jobs.py` lines 72–73.
+  - NOTE: Automated test suite does NOT cover this case — see Medium bugs.
 
-**Result: PASS**
+- [PASS] **Criterion 5**: All 42 backend tests pass.
+  - Evidence: `python -m pytest tests/ -q` → `42 passed in 1.39s` (verbatim). Full verbose run also showed 42/42 PASSED.
 
----
+- [PASS] **Criterion 6**: Frontend builds without TypeScript errors.
+  - Evidence: `cd src/frontend && npm run build` → `tsc && vite build` completed with 953 modules transformed, zero TS errors, exit 0. Non-critical 510 kB chunk-size Vite advisory is pre-existing and not a build failure.
 
-## SC-3: `tsc --noEmit` exits 0 (zero TypeScript errors)
+- [PASS] **Criterion 7**: `deleteJob` exists in `src/frontend/src/services/api.ts`.
+  - Evidence: `api.ts` line 90: `export async function deleteJob(jobId: string): Promise<void>` — correct typed implementation using `apiFetch` with `{ method: 'DELETE' }`.
 
-**Command:**
-```bash
-npx tsc --noEmit 2>&1 && echo "TSC OK"
-```
+- [PASS] **Criterion 8**: Delete button only shown for `completed`/`failed` jobs in JobList.
+  - Evidence: `JobList.tsx` line 133: `{(job.status === 'completed' || job.status === 'failed') && (<DeleteButton .../>)}`.
 
-**Output:**
-```
-TSC OK
-```
-
-Zero TypeScript errors. Exit code 0.
-
-**Result: PASS**
+- [PASS] **Criterion 9**: Confirmation step (Yes/No) before actual delete.
+  - Evidence: `DeleteButton` component (`JobList.tsx` lines 12–61) — first click sets `confirming = true`, revealing "Delete? Yes / No" inline buttons. Only "Yes" invokes `deleteJob`. "No" returns to trash icon without side effects.
 
 ---
 
-## SC-4: `npm run build` exits 0
+## Bugs Found
 
-**Command:**
-```bash
-npm run build 2>&1
-```
+### Critical
+None.
 
-**Output:**
-```
-> veluga-pdf-parser-frontend@1.0.0 build
-> tsc && vite build
+### High
+None.
 
-vite v8.0.3 building client environment for production...
-✓ 953 modules transformed.
-dist/index.html                   0.46 kB │ gzip:   0.30 kB
-dist/assets/index-C3ppeSdH.css   16.74 kB │ gzip:   4.38 kB
-dist/assets/index-DDa3NEVh.js   508.59 kB │ gzip: 158.78 kB
+### Medium
+- **Missing automated test for DELETE pending/running → 400**: The `TestDelete` class covers 404 (nonexistent), 200 (completed), and filesystem verification, but has no test asserting that deleting a pending or running job returns 400. The runtime behavior is correct (verified manually), but a regression in the guard logic would go undetected by the test suite.
 
-✓ built in 417ms
-```
-
-Note: A non-fatal chunk size warning appeared (508 kB bundle > 500 kB threshold). This is a Vite performance advisory only — it does NOT cause a non-zero exit code and is out of scope for this Sprint. The build exits 0.
-
-**Result: PASS**
+### Low
+- **Bare `except Exception: pass` in migration** (`database.py` lines 39–43): All exceptions are swallowed in the `ALTER TABLE` migration block. Expected use case is "column already exists", but a genuine I/O or permissions error would also be silenced, making debugging harder. Prefer catching `sqlalchemy.exc.OperationalError`.
+- **Duplicate `_utcnow` helper**: Defined identically in both `models/job.py` (line 8) and `routes/jobs.py` (line 18). Should be extracted to a shared utility.
+- **Frontend chunk size**: JS bundle at 510 kB slightly exceeds Vite's 500 kB advisory. Pre-existing, not introduced by this feature.
 
 ---
 
-## SC-5: `npm run lint` exits 0 OR documented as known ecosystem limitation
+## Detailed Code Review
 
-**Command:**
-```bash
-npm run lint 2>&1; echo "EXIT:$?"
-```
+### What Went Well
+- Soft-delete via `deleted_at` timestamp is the correct pattern — preserves data for audit, reversible if needed.
+- Idempotent migration (`ALTER TABLE … ADD COLUMN` in try/except) enables safe deployment on existing DBs.
+- `DeleteButton` is a well-isolated component with clean two-phase confirm UX and inline error display.
+- `handleDeleted` in `JobList` optimistically removes the deleted item from local state without a full refetch.
+- `_job_to_dict` omits `deleted_at` — no soft-delete internals leak through the API surface.
+- All files are well within the 300-line limit per CLAUDE.md conventions.
+- No hardcoded secrets; no SQL injection vectors (ORM-based queries throughout).
 
-**Output:**
-```
-> veluga-pdf-parser-frontend@1.0.0 lint
-> eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0
+### Needs Improvement
+- File: `src/backend/database.py`, Lines 39–43
+  - Issue: `except Exception: pass` is too broad.
+  - Suggestion: Catch `sqlalchemy.exc.OperationalError` and inspect the message for "duplicate column".
 
-EXIT:0
-```
+- File: `src/backend/routes/jobs.py`, Lines 18–19 (duplicate of `src/backend/models/job.py` Lines 8–9)
+  - Issue: `_utcnow` duplicated across modules.
+  - Suggestion: Move to `src/backend/utils.py` and import from there.
 
-ESLint completed with zero warnings and zero errors. Exit code 0. No ecosystem workaround was needed.
-
-**Result: PASS**
-
----
-
-## Additional Verification
-
-### `cat src/vite-env.d.ts`
-```
-/// <reference types="vite/client" />
-```
-
-Standard Vite client reference — no issues.
+- File: `tests/integration/test_api.py`, `TestDelete` class
+  - Issue: No coverage for DELETE on in-progress jobs.
+  - Suggestion: Add `test_delete_pending_job_returns_400` and `test_delete_running_job_returns_400`.
 
 ---
 
-## Summary
+## Required Fixes for FAIL
+N/A — result is PASS. The medium-severity gap (missing test for criterion 4) is a recommended improvement.
 
-| SC   | Criterion                              | Actual                          | Result |
-|------|----------------------------------------|---------------------------------|--------|
-| SC-1 | typescript ^6.0.0 in package.json     | `"typescript": "^6.0.0"` (6.0.2 installed) | PASS |
-| SC-2 | npm install completes                  | Completed, 0 vulnerabilities    | PASS   |
-| SC-3 | tsc --noEmit exits 0                  | "TSC OK", exit 0                | PASS   |
-| SC-4 | npm run build exits 0                  | Built in 417ms, exit 0          | PASS   |
-| SC-5 | npm run lint exits 0 or documented    | Exit 0, no issues               | PASS   |
-
-### Notes
-- TypeScript 6.0.2 is the latest GA release, correctly installed.
-- The `--legacy-peer-deps` flag is required due to `typescript-eslint@8.x` having a peer dependency cap below TS 6.0.0. This is expected and documented in the contract as out of scope.
-- A Vite chunk-size advisory (>500 kB) appeared during build but does not affect correctness or exit code.
-- `vite-env.d.ts` contains the standard Vite client reference, no issues.
+---
 
 Overall Result: PASS
