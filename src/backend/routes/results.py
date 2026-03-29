@@ -227,6 +227,63 @@ def get_elements(
     return {"job_id": job_id, "total": len(elements), "elements": elements}
 
 
+@router.get("/jobs/{job_id}/markdown/pages")
+def get_markdown_pages(job_id: str, db: Session = Depends(get_db)):
+    """Return page count and list of available per-page Markdown files."""
+    job = _get_job_or_404(job_id, db)
+    _require_completed(job)
+    parsed = _get_result_or_404(job_id, db)
+
+    pages_dir = getattr(parsed, "markdown_pages_dir", None)
+    if not pages_dir or not Path(pages_dir).is_dir():
+        raise HTTPException(status_code=404, detail="Per-page Markdown not available for this job")
+
+    md_files = sorted(Path(pages_dir).glob("page_*.md"))
+    page_numbers = []
+    for f in md_files:
+        try:
+            num = int(f.stem.replace("page_", ""))
+            page_numbers.append(num)
+        except ValueError:
+            continue
+    page_numbers.sort()
+
+    return {
+        "job_id": job_id,
+        "total_pages": len(page_numbers),
+        "pages": page_numbers,
+    }
+
+
+@router.get("/jobs/{job_id}/markdown/pages/{page_number}")
+def get_markdown_page(job_id: str, page_number: int, db: Session = Depends(get_db)):
+    """Return the Markdown content for a specific page."""
+    job = _get_job_or_404(job_id, db)
+    _require_completed(job)
+    parsed = _get_result_or_404(job_id, db)
+
+    pages_dir = getattr(parsed, "markdown_pages_dir", None)
+    if not pages_dir or not Path(pages_dir).is_dir():
+        raise HTTPException(status_code=404, detail="Per-page Markdown not available for this job")
+
+    page_file = Path(pages_dir) / f"page_{page_number}.md"
+    if not page_file.exists():
+        raise HTTPException(status_code=404, detail=f"Page {page_number} not found")
+
+    content = page_file.read_text(encoding="utf-8")
+
+    # Get total pages for navigation context
+    md_files = list(Path(pages_dir).glob("page_*.md"))
+    total_pages = len(md_files)
+
+    return {
+        "job_id": job_id,
+        "page_number": page_number,
+        "total_pages": total_pages,
+        "content": content,
+    }
+
+
 @router.get("/jobs/{job_id}/download/chunks")
 def download_chunks(job_id: str, db: Session = Depends(get_db)):
     """Download the chunks.json export file."""

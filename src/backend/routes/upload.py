@@ -59,6 +59,9 @@ def _run_parse_job(job_id: str, file_path: Path, image_dir: Path) -> None:
         meta = result.get("metadata", {})
         chunks = result.get("chunks", {})
 
+        # Strip page_markdowns from result before DB storage (too large for SQLite)
+        result.pop("page_markdowns", None)
+
         # Serialize and save ParsedResult first, then mark job completed.
         # This order prevents the job from appearing "completed" with no result row
         # if a serialization or DB error occurs between the two commits.
@@ -76,6 +79,7 @@ def _run_parse_job(job_id: str, file_path: Path, image_dir: Path) -> None:
             markdown_path=export_paths["markdown_path"],
             text_path=export_paths["text_path"],
             chunks_path=export_paths.get("chunks_path"),
+            markdown_pages_dir=export_paths.get("markdown_pages_dir"),
         )
         db.add(parsed)
         db.commit()

@@ -24,4 +24,5 @@ class ParsedResult(Base):
     json_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     chunks_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     image_dir: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    markdown_pages_dir: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)

@@ -48,6 +48,7 @@ _RESULT_MIGRATIONS = [
     "ALTER TABLE parsed_results ADD COLUMN element_count INTEGER",
     "ALTER TABLE parsed_results ADD COLUMN chunks_path TEXT",
     "ALTER TABLE parsed_results ADD COLUMN structure_json TEXT",
+    "ALTER TABLE parsed_results ADD COLUMN markdown_pages_dir TEXT",
 ]
 
 

@@ -30,12 +30,52 @@ def _table_rows_to_gfm(rows: list) -> str:
     return "\n".join(lines)
 
 
+def to_page_markdowns(result: dict, pages_dir: Path) -> Path:
+    """Write per-page Markdown files from Docling native export. Returns pages_dir."""
+    pages_dir.mkdir(parents=True, exist_ok=True)
+    page_markdowns = result.get("page_markdowns", {})
+    for page_num_str, md_content in page_markdowns.items():
+        page_file = pages_dir / f"page_{page_num_str}.md"
+        with open(page_file, "w", encoding="utf-8") as f:
+            f.write(md_content)
+    return pages_dir
+
+
 def to_markdown(result: dict, output_path: Path) -> Path:
-    """Convert parsed result to Markdown file with GFM tables. Returns output_path."""
+    """Convert parsed result to Markdown file. Uses Docling native per-page export if available,
+    otherwise falls back to manual element assembly. Returns output_path."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    page_markdowns = result.get("page_markdowns", {})
+    meta = result.get("metadata", {})
+
+    if page_markdowns:
+        # Use Docling's native per-page Markdown, concatenated with page separators
+        lines = []
+        lines.append("# Parsed Document")
+        lines.append("")
+        if meta.get("languages"):
+            lines.append(f"**Languages:** {', '.join(meta['languages'])}")
+        lines.append(f"**Pages:** {meta.get('total_pages', len(page_markdowns))}")
+        lines.append("")
+
+        total = meta.get("total_pages", len(page_markdowns))
+        for p in range(1, total + 1):
+            md = page_markdowns.get(str(p), "")
+            lines.append("---")
+            lines.append(f"## Page {p}")
+            lines.append("")
+            if md.strip():
+                lines.append(md)
+                lines.append("")
+
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+        return output_path
+
+    # Fallback: manual element-by-element assembly
     lines = []
     pages = result.get("pages", [])
-    meta = result.get("metadata", {})
 
     lines.append("# Parsed Document")
     lines.append("")
@@ -46,7 +86,7 @@ def to_markdown(result: dict, output_path: Path) -> Path:
 
     for page in pages:
         page_num = page.get("page_number", "?")
-        lines.append(f"---")
+        lines.append("---")
         lines.append(f"## Page {page_num}")
         lines.append("")
         for elem in page.get("elements", []):
@@ -164,8 +204,12 @@ def generate_all_exports(result: dict, job_dir: Path) -> dict:
     Generate all export files and return a dict with paths.
 
     Returns:
-        {"json_path": str, "markdown_path": str, "text_path": str, "chunks_path": str}
+        {"json_path": str, "markdown_path": str, "text_path": str,
+         "chunks_path": str, "markdown_pages_dir": str}
     """
+    # Write per-page Markdown files first (used by to_markdown for concatenation)
+    pages_dir = to_page_markdowns(result, job_dir / "markdown_pages")
+
     json_path = to_json(result, job_dir / "result.json")
     md_path = to_markdown(result, job_dir / "result.md")
     txt_path = to_text(result, job_dir / "result.txt")
@@ -175,4 +219,5 @@ def generate_all_exports(result: dict, job_dir: Path) -> dict:
         "markdown_path": str(md_path),
         "text_path": str(txt_path),
         "chunks_path": str(chunks_path),
+        "markdown_pages_dir": str(pages_dir),
     }

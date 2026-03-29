@@ -323,6 +323,25 @@ def parse_pdf(file_path: Path, image_dir: Path) -> dict:
 
     languages = sorted(all_languages) if all_languages else ["en"]
 
+    # Generate per-page Markdown using Docling's native export
+    page_markdowns: dict[str, str] = {}
+    try:
+        from docling_core.types.doc.base import ImageRefMode
+        image_mode = ImageRefMode.EMBEDDED
+    except ImportError:
+        image_mode = None
+
+    for p in range(1, total_pages + 1):
+        try:
+            kwargs: dict[str, Any] = {"page_no": p}
+            if image_mode is not None:
+                kwargs["image_mode"] = image_mode
+            md = doc.export_to_markdown(**kwargs)
+            page_markdowns[str(p)] = md
+        except Exception as ex:
+            logger.warning(f"Docling export_to_markdown failed for page {p}: {ex}")
+            page_markdowns[str(p)] = ""
+
     return {
         "schema_version": "2.0",
         "metadata": {
@@ -340,4 +359,5 @@ def parse_pdf(file_path: Path, image_dir: Path) -> dict:
         "elements": elements,
         "pages": pages_data,
         "chunks": {},
+        "page_markdowns": page_markdowns,
     }
