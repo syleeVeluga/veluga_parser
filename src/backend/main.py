@@ -2,8 +2,15 @@
 Veluga PDF Parser — FastAPI application entry point.
 """
 import logging
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# Ensure project root is on sys.path so 'src.backend' imports resolve
+# regardless of which directory uvicorn is launched from.
+_project_root = str(Path(__file__).resolve().parent.parent.parent)
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

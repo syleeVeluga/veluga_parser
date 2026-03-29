@@ -1,62 +1,51 @@
-# Final Report: Frontend Major Dependency Upgrades (Sprint 6)
+# Final Report — Sprint 7: Enhanced PDF-to-Markdown with Page Navigation
 
-**Date:** 2026-03-29
-**Sprint:** 6
-**Result:** PASS (5/5 sprints, 25/25 criteria)
+## Summary
 
-## Implemented Upgrades
+Successfully implemented per-page Markdown generation using Docling's native `export_to_markdown(page_no=N)` with embedded images, new API endpoints, and a page-by-page Markdown viewer in the frontend.
 
-| Package | From | To | Sprint |
-|---------|------|----|--------|
-| react-router-dom | ^6.28.0 | ^7.0.0 | 1 |
-| vite | ^6.0.3 | ^8.0.0 | 2 |
-| @vitejs/plugin-react | ^4.3.4 | ^6.0.0 | 2 |
-| tailwindcss | ^3.4.15 | ^4.0.0 | 3 |
-| @tailwindcss/vite | (new) | ^4.0.0 | 3 |
-| autoprefixer | ^10.4.20 | removed | 3 |
-| react | ^18.3.1 | ^19.0.0 | 4 |
-| react-dom | ^18.3.1 | ^19.0.0 | 4 |
-| @types/react | ^18.3.12 | ^19.0.0 | 4 |
-| @types/react-dom | ^18.3.1 | ^19.0.0 | 4 |
-| typescript | ^5.6.3 | ^6.0.0 | 5 |
+## Implemented Features
 
-## Breaking Changes Resolved
+### Backend
+- **Per-page Markdown generation**: Docling native export with `ImageRefMode.EMBEDDED` for base64 inline images
+- **Disk storage**: Per-page `.md` files stored in `markdown_pages/` directory per job
+- **New API endpoints**:
+  - `GET /api/jobs/{id}/markdown/pages` — page list + total count
+  - `GET /api/jobs/{id}/markdown/pages/{N}` — individual page content
+- **DB migration**: `markdown_pages_dir` column on `ParsedResult`
+- **Full backward compatibility**: existing download endpoint unchanged
 
-### react-router-dom 7
-- No breaking changes hit — all v6 APIs used (`createBrowserRouter`, `RouterProvider`, `Link`, `useParams`, `Navigate`, `Outlet`) are unchanged in v7.
-
-### Vite 8
-- `vite.config.ts`: proxy string shorthand → object form `{ target: 'http://...', changeOrigin: false }`
-- `@vitejs/plugin-react` upgraded to v6 (Vite 8 peer dep)
-
-### Tailwind CSS 4
-- `tailwind.config.js` deleted (v4 auto-detects content)
-- `postcss.config.js` emptied (v4 Vite plugin replaces PostCSS integration)
-- `src/styles/index.css`: `@tailwind base/components/utilities` → `@import "tailwindcss"`
-- `vite.config.ts`: added `tailwindcss()` plugin from `@tailwindcss/vite`
-- All `flex-shrink-0` renamed to `shrink-0` (3 files: OutputPane.tsx, ResultsViewer.tsx, JobDetailPage.tsx)
-
-### React 19
-- No breaking changes hit — codebase was already clean: no `forwardRef`, no `React.FC`, no bare `useRef()`, no `Context.Provider`, no legacy `ReactDOM.render`. All `useRef` calls already had initial values.
-- Third-party libs (react-split, react-markdown, react-syntax-highlighter) all declare compatible peer deps.
-
-### TypeScript 6
-- Added `src/vite-env.d.ts` with `/// <reference types="vite/client" />` to fix new TS2882 error on CSS side-effect imports
-- `typescript-eslint@8.x` peer dep cap is `<6.0.0` but works at runtime with `--legacy-peer-deps`; lint exits 0
+### Frontend
+- **Page-by-page Markdown viewer**: Navigation bar matching PdfPane style (prev/next + page indicator)
+- **Fallback mode**: Old jobs without per-page data gracefully show full document
+- **UI fixes**:
+  - `ResultsViewer`: replaced `max-h-[600px]` with `flex-1 min-h-0`
+  - `JobDetailPage`: reduced bottom padding from `pb-4` to `pb-2`
 
 ## Test Results
-- `pytest`: 42/42 passed
-- `npm run build`: exit 0, 953 modules transformed, 0 TypeScript errors
-- `npm run lint`: exit 0, 0 warnings
-- `tsc --noEmit`: exit 0
+- **Frontend build**: Zero TypeScript errors (tsc + vite)
+- **TypeScript strict check**: Zero errors
+- **Playwright E2E**: 18/18 tests pass
+- **Evaluation score**: 77.25% — PASS
+
+## Files Changed (10 files, +308 lines)
+- `src/backend/models/result.py` — new column
+- `src/backend/database.py` — migration
+- `src/backend/services/parser.py` — per-page Markdown export
+- `src/backend/services/exporter.py` — `to_page_markdowns()` + updated exports
+- `src/backend/routes/results.py` — 2 new endpoints
+- `src/backend/routes/upload.py` — store path, strip data
+- `src/frontend/src/services/api.ts` — 2 new API wrappers
+- `src/frontend/src/components/tabs/MarkdownTab.tsx` — full rewrite
+- `src/frontend/src/components/ResultsViewer.tsx` — height fix
+- `src/frontend/src/pages/JobDetailPage.tsx` — padding fix
 
 ## Known Limitations
-- `typescript-eslint@8.x` declares peer dep `typescript <6.0.0` — no stable TS6-compatible release exists yet. Works at runtime but will show peer dep warnings. Update when typescript-eslint@9+ is released.
-- Bundle size advisory: JS chunk is 508 kB (Vite warns at 500 kB) — out of scope for this upgrade sprint.
+- Existing jobs need reprocessing to generate per-page Markdown
+- No keyboard shortcuts for page navigation (future)
+- No adjacent page prefetching (future)
+- No E2E tests for new Markdown pagination (recommended for next sprint)
 
 ## Commits
-- `3ac08ab` — chore(frontend): upgrade react-router-dom to v7
-- `ba219d3` — chore(frontend): upgrade vite to v8 and @vitejs/plugin-react to v6
-- `aa61718` — chore(frontend): upgrade tailwindcss to v4 with CSS-first config
-- `bf98b1d` — chore(frontend): upgrade react and react-dom to v19
-- `58c3622` — chore(frontend): upgrade typescript to v6; add vite-env.d.ts for TS2882 fix
+1. `9b9a1e9` — feat(sprint7): per-page Markdown generation via Docling native export
+2. `b05de04` — feat(sprint7): page-by-page Markdown viewer + UI padding fixes

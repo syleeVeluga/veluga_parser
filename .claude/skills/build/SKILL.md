@@ -2,7 +2,7 @@
 name: build
 description: Incrementally implement code according to the Sprint contract
 disable-model-invocation: true
-allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+allowed-tools: Read, Write, Edit, Bash, Grep, Globㅓ
 argument-hint: "[sprint number or 'next']"
 ---
 
