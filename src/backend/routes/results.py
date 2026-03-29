@@ -110,7 +110,11 @@ def get_pdf(job_id: str, db: Session = Depends(get_db)):
     pdf_path = Path(job.file_path)
     if not pdf_path.exists():
         raise HTTPException(status_code=404, detail="PDF file not found on disk")
-    return FileResponse(path=str(pdf_path), media_type="application/pdf", filename=job.filename)
+    return FileResponse(
+        path=str(pdf_path),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=\"{job.filename}\""},
+    )
 
 
 @router.get("/jobs/{job_id}/images/{filename}")
