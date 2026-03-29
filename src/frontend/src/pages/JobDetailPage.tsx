@@ -135,7 +135,7 @@ function JobDetail({ jobId }: { jobId: string }) {
 
       {/* Split pane — full width, fills remaining height */}
       {job?.status === 'completed' && (
-        <div className="flex-1 min-h-0 px-4 pb-4">
+        <div className="flex-1 min-h-0 px-4 pb-2">
           <SplitPaneViewer jobId={jobId} filename={job.filename} />
         </div>
       )}

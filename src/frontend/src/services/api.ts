@@ -246,6 +246,27 @@ export function getPdfUrl(jobId: string): string {
   return `/api/jobs/${jobId}/pdf`
 }
 
+export interface MarkdownPagesResponse {
+  job_id: string
+  total_pages: number
+  pages: number[]
+}
+
+export interface MarkdownPageResponse {
+  job_id: string
+  page_number: number
+  total_pages: number
+  content: string
+}
+
+export async function getMarkdownPages(jobId: string): Promise<MarkdownPagesResponse> {
+  return apiFetch<MarkdownPagesResponse>(`/api/jobs/${jobId}/markdown/pages`)
+}
+
+export async function getMarkdownPage(jobId: string, pageNumber: number): Promise<MarkdownPageResponse> {
+  return apiFetch<MarkdownPageResponse>(`/api/jobs/${jobId}/markdown/pages/${pageNumber}`)
+}
+
 export async function getStructure(
   jobId: string
 ): Promise<{ job_id: string; structure_profile: StructureProfile }> {

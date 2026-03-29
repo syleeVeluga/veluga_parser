@@ -329,7 +329,7 @@ export function ResultsViewer({ jobId, filename, status, activePage: externalPag
               className="px-3 py-1.5 text-xs rounded border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
             >Next →</button>
           </div>
-          <div ref={contentRef} className="border border-gray-200 rounded-lg p-4 bg-white overflow-y-auto max-h-[600px]">
+          <div ref={contentRef} className="border border-gray-200 rounded-lg p-4 bg-white overflow-y-auto flex-1 min-h-0">
             {currentPage
               ? <PageContent elements={currentPage.elements} jobId={jobId} />
               : <p className="text-gray-400 text-sm">No content on this page</p>
