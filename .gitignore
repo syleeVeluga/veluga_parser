@@ -7,3 +7,4 @@ uploads/
 src/frontend/node_modules/
 src/frontend/dist/
 node_modules/
+.claude/settings.json
