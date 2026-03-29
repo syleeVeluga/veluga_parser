@@ -1,201 +1,275 @@
-# Feature Spec: Sprint 8 — Markdown Viewer E2E Tests + Helper Mocks
+# Feature Spec: OCR VL Engine Selection (PaddleOCR 3 + Gemini Flash)
 
 ## Overview
-Sprint 7 shipped per-page Markdown pagination and a new MarkdownTab component, but left two
-medium-severity testing gaps identified in the evaluation report: no Playwright spec for the
-Markdown viewer and no route mocks for the new `/markdown/pages` endpoints in `helpers.ts`.
-This Sprint closes those gaps by adding `markdown-viewer.spec.ts` and patching `helpers.ts`
-with the missing mocks and mock fixtures.
+Extend the veluga_parser extraction pipeline with two additional Vision-Language OCR engines:
+PaddleOCR 3 (local installation) and Google Gemini Flash API. Users select their preferred engine
+per upload via a compact engine-selector UI embedded in the upload flow. A Settings panel
+stores the Gemini API key persistently in the backend `.env` file.
 
 ## Feature Requirements
 
 ### Must-Have
-- [ ] Add mock for `GET /api/jobs/*/markdown/pages` in `helpers.ts` returning a multi-page
-      `MarkdownPagesResponse` (job_id, total_pages, pages array)
-- [ ] Add mock for `GET /api/jobs/*/markdown/pages/*` in `helpers.ts` returning per-page
-      `MarkdownPageResponse` (job_id, page_number, total_pages, content)
-- [ ] Add `MOCK_MARKDOWN_PAGES` and `MOCK_MARKDOWN_PAGE_*` fixtures to `fixtures.ts`
-- [ ] Create `src/frontend/e2e/markdown-viewer.spec.ts` with the following test cases:
-  - Prev button is disabled on page 1
-  - Next button is enabled on page 1 (not last page)
-  - Clicking Next advances the page indicator from "1 / 3" to "2 / 3"
-  - Page content changes after navigation (different text visible)
-  - Next button is disabled on the last page
-  - Prev button re-enables after advancing past page 1
-  - Clicking Next then Prev returns to page 1
-  - Scroll position resets to 0 after page navigation
-- [ ] Existing `document-viewer.spec.ts` test "output tabs switch correctly" must continue to
-      pass (it currently relies on the fallback mode; after adding the pages mock the
-      MarkdownTab will switch to paginated mode — the test content assertion must still hold)
+- [ ] `EngineType` enum with values `docling`, `paddleocr`, `gemini` persisted on the Job model
+- [ ] `parse_pdf_paddleocr()` function in `src/backend/services/parser_paddleocr.py` producing the same v2 result dict schema as `parse_pdf()`
+- [ ] `parse_pdf_gemini()` function in `src/backend/services/parser_gemini.py` producing the same v2 result dict schema
+- [ ] `upload.py` accepts optional `engine` form field (`docling` | `paddleocr` | `gemini`) defaulting to `docling`
+- [ ] `upload.py` `_run_parse_job` dispatches to the correct parser based on stored engine
+- [ ] `POST /api/settings/api-keys` endpoint — save Gemini API key to server `.env` file and reload config
+- [ ] `GET /api/settings/api-keys` endpoint — return `{ gemini_configured: bool }` (never return the raw key)
+- [ ] Engine selector component rendered in `UploadZone` above the drop-zone, with three clearly labelled radio-style option cards
+- [ ] Gemini option is greyed-out with a "No API key" warning if Gemini key is not configured
+- [ ] Settings page/panel accessible from the app navigation for entering the Gemini API key
+- [ ] `engine` field displayed in job list row and job detail metadata bar
+- [ ] `reprocess` endpoint accepts optional `engine` override; defaults to job's original engine
+- [ ] All new API endpoints covered by pytest integration tests
+- [ ] PaddleOCR parser produces elements with the same fields as docling output: `element_id`, `type`, `content`, `page_number`, `reading_order`, `bbox`, `language`
+- [ ] Gemini parser sends each PDF page as a base64-encoded image to the Gemini Flash vision API and parses returned markdown into elements
 
 ### Nice-to-Have
-- [ ] Test that MarkdownTab enters fallback mode when `/markdown/pages` returns 404
-      (mock a specific job that returns 404 for the pages endpoint only)
-- [ ] Test that the page indicator label reads "1 / N" before any navigation
+- [ ] Per-engine processing time recorded in job metadata (`parse_duration_seconds`)
+- [ ] Inline API key test button in Settings that calls a lightweight Gemini probe request
+- [ ] PaddleOCR language hint passed as a config option (default `["en", "ko", "ja", "ch"]`)
+- [ ] Toast notification if user selects Gemini without a configured key and tries to upload
 
 ## Technical Design
 
 ### Data Models
-No new data models. Tests use mock data only.
 
-**New fixtures to add to `fixtures.ts`:**
+**Job table — new columns:**
+| Column | Type | Default | Notes |
+|--------|------|---------|-------|
+| `engine` | `String(20)` | `"docling"` | `docling` / `paddleocr` / `gemini` |
+| `parse_duration_seconds` | `Float` | `NULL` | wall-clock parse time |
 
-```
-MOCK_MARKDOWN_PAGES = {
-  job_id: 'job-001',
-  total_pages: 3,
-  pages: [1, 2, 3]
-}
+No schema migration file is needed for SQLite dev; `create_tables()` with `checkfirst=True` handles new columns by dropping and recreating in dev. Document that production migration is manual ALTER TABLE.
 
-MOCK_MARKDOWN_PAGE_1 = {
-  job_id: 'job-001',
-  page_number: 1,
-  total_pages: 3,
-  content: '# Parsed Document\n\nSample body text for testing.\n'
-}
-
-MOCK_MARKDOWN_PAGE_2 = {
-  job_id: 'job-001',
-  page_number: 2,
-  total_pages: 3,
-  content: '## Section Two\n\nContent on page two.\n'
-}
-
-MOCK_MARKDOWN_PAGE_3 = {
-  job_id: 'job-001',
-  page_number: 3,
-  total_pages: 3,
-  content: '## Section Three\n\nContent on page three.\n'
-}
-```
+Decision: engine is stored on the Job row (not on ParsedResult) because it is a property of how the job was requested, not of the result content.
 
 ### API Endpoints
-No new backend endpoints. Endpoints introduced in Sprint 7 are being tested:
 
-| Method | Path | Response Shape |
-|--------|------|---------------|
-| GET | /api/jobs/{id}/markdown/pages | `{ job_id, total_pages, pages: number[] }` |
-| GET | /api/jobs/{id}/markdown/pages/{page_num} | `{ job_id, page_number, total_pages, content }` |
+| Method | Path | Auth | Request Body / Params | Response |
+|--------|------|------|-----------------------|---------|
+| POST | `/api/upload` | No | `file` (PDF), `engine` (form field, optional) | existing `UploadResponse` |
+| POST | `/api/jobs/{job_id}/reprocess` | No | JSON `{ "engine": "gemini" }` (optional) | `{ job_id, status }` |
+| GET | `/api/settings/api-keys` | No | — | `{ "gemini_configured": bool }` |
+| POST | `/api/settings/api-keys` | No | JSON `{ "gemini_api_key": "..." }` | `{ "gemini_configured": true }` |
 
-### Route Mock Pattern
-The mock for the per-page endpoint must capture different page numbers and respond with
-different content. The recommended approach is to match the wildcard route
-`**/api/jobs/*/markdown/pages/*` and inspect `route.request().url()` to extract the page
-number, then return the appropriate fixture object.
+**Engine field in existing responses:**
+- `JobSummary` gains `engine: str` field
+- `GET /api/jobs/{job_id}` response includes `engine`
 
-Alternatively, register three separate exact-path mocks:
-- `**/api/jobs/job-001/markdown/pages/1` -> MOCK_MARKDOWN_PAGE_1
-- `**/api/jobs/job-001/markdown/pages/2` -> MOCK_MARKDOWN_PAGE_2
-- `**/api/jobs/job-001/markdown/pages/3` -> MOCK_MARKDOWN_PAGE_3
+### Settings Storage
+The Gemini API key is written to a `.env` file at the project root (`BASE_DIR/.env`) using
+`python-dotenv`'s `set_key()`. The key name is `GEMINI_API_KEY`. Config module reads it at
+startup via `os.getenv("GEMINI_API_KEY", "")`. The `/api/settings/api-keys` POST endpoint
+calls `dotenv.set_key()` then updates `config.GEMINI_API_KEY` in-process without a restart.
 
-The wildcard approach is preferred for maintainability. The implementation in `helpers.ts`
-should use the URL-based dispatch pattern already present in the `chunks` mock (lines 44-47).
+The key is never returned by any GET endpoint — only the boolean `gemini_configured` is exposed.
 
-**Important ordering note**: The wildcard `**/api/jobs/*/markdown/pages/*` must be
-registered BEFORE `**/api/jobs/*/markdown/pages` (no trailing path segment) to avoid
-Playwright's route matching shadowing the more-specific path. Register the single-page
-mock first.
+### Parser Architecture
 
-### Existing Mock Conflict
-The existing `document-viewer.spec.ts` test "output tabs switch correctly" (line 22)
-currently asserts `await expect(page.getByText('Parsed Document')).toBeVisible()` which
-works because `helpers.ts` has no pages mock, causing a 404, which triggers MarkdownTab
-fallback mode that renders the full `MOCK_MARKDOWN` content (containing "# Parsed Document").
-
-After adding the pages mock, MarkdownTab will load in paginated mode and render
-`MOCK_MARKDOWN_PAGE_1` content instead (which must also contain "Parsed Document"). The
-fixture must be designed this way — do not change the assertion in `document-viewer.spec.ts`.
-`MOCK_MARKDOWN_PAGE_1.content` must start with `# Parsed Document`.
-
-### UI Layout
-No new UI. The tests target the existing MarkdownTab layout:
-
+**Adapter contract** — all three parsers must return a dict matching this structure (same as
+existing `parse_pdf()` return value):
 ```
-+----------------------------------------------+
-| Markdown                 <  1 / 3  >          |  <- nav bar
-+----------------------------------------------+
-|                                              |
-|  # Parsed Document                           |  <- content area (scrollable)
-|  Sample body text for testing.               |
-|                                              |
-+----------------------------------------------+
+{
+  "schema_version": "2.0",
+  "metadata": { total_pages, languages, has_tables, has_images, has_equations, has_code, title, page_dimensions },
+  "toc": [...],
+  "elements": [...],
+  "pages": [...],
+  "chunks": {},
+  "page_markdowns": { "1": "...", ... }
+}
 ```
 
-Selectors to use in tests:
-- Prev button: `page.locator('button:has-text("\u2039")')` (the rendered lsaquo character)
-- Next button: `page.locator('button:has-text("\u203a")')` (the rendered rsaquo character)
-- Page indicator: `page.getByText(/\d+ \/ \d+/)` — matches "1 / 3" pattern
-- Content area: identified by unique text in `MOCK_MARKDOWN_PAGE_*` content
-- The MarkdownTab is the default active tab; no tab-click needed to activate it
+**`src/backend/services/parser_paddleocr.py`**
+- Import guard: `try: from paddleocr import PaddleOCR` → raises `RuntimeError` with install hint if missing
+- Uses `PaddleOCR(use_angle_cls=True, lang="ch")` for CJK; falls back to `lang="en"` for English
+- Renders each PDF page to a PIL image via `pypdfium2` (already a transitive dependency of docling)
+- Runs OCR on each page image, collects text blocks with bbox coordinates
+- Maps each block to element type `"text"` (PaddleOCR does not provide semantic labels); title heuristic: first block on page 1 with font size significantly larger than median
+- Calls `_detect_language()` from `parser.py` (shared utility, imported directly)
+- Produces `page_markdowns` as plain concatenated text per page
 
-**Note on scroll reset test**: Use `page.evaluate(() => document.querySelector('.markdown-body')?.scrollTop ?? 0)` or a more robust selector targeting the scrollable container. Since the content div uses `ref={contentRef}` with no data-testid, the test can either scroll the content div programmatically first then navigate, then assert `scrollTop === 0`, or it can add a data-testid to the content area. If no data-testid exists, use the first `.overflow-y-auto` child of the markdown nav bar's parent.
+**`src/backend/services/parser_gemini.py`**
+- Import guard: `try: import google.generativeai as genai` → raises `RuntimeError` with install hint
+- Reads `GEMINI_API_KEY` from `config` at call time (not import time)
+- Renders each PDF page to base64 PNG via `pypdfium2`
+- Sends each page image to `gemini-2.0-flash` with a structured prompt requesting markdown output
+- Prompt instructs model to preserve headings, tables (as Markdown), and lists; output plain Markdown per page
+- Parses returned Markdown per page into elements using a lightweight Markdown-to-elements converter (headings → `section_header`/`title`, paragraphs → `text`, fenced code → `code`, `|...|` tables → `table`)
+- Rate-limits: sends pages sequentially with 0.5 s between requests to avoid 429 errors
+- `page_markdowns` is set to the raw Markdown returned by Gemini per page
+
+**Dispatch in `upload.py`:**
+```python
+if job.engine == "paddleocr":
+    from src.backend.services.parser_paddleocr import parse_pdf_paddleocr as _parse
+elif job.engine == "gemini":
+    from src.backend.services.parser_gemini import parse_pdf_gemini as _parse
+else:
+    from src.backend.services.parser import parse_pdf as _parse
+result = _parse(file_path, image_dir)
+```
+
+### New Backend Files
+- `src/backend/services/parser_paddleocr.py` — PaddleOCR 3 adapter
+- `src/backend/services/parser_gemini.py` — Gemini Flash adapter
+- `src/backend/routes/settings.py` — API key management endpoints
+- `src/tests/test_settings.py` — pytest coverage for settings routes
+- `src/tests/test_engine_dispatch.py` — pytest coverage for engine routing
+
+### Frontend Screens
+
+**EngineSelector component** (`src/frontend/src/components/EngineSelector.tsx`)
+Three horizontally-arranged option cards, radio-button semantics:
+- "Docling" — default, always enabled, subtitle "Local · Multi-lingual"
+- "PaddleOCR 3" — always enabled, subtitle "Local · CJK-optimised"
+- "Gemini Flash" — enabled only if `gemini_configured === true`; otherwise shows lock icon + "Add API key in Settings"
+Emits `onChange(engine: EngineType)`. Selected card has a distinct left-border accent and background.
+
+**UploadZone changes** — accepts `engine` prop; passes it to `uploadPdf()`.
+`uploadPdf()` in `api.ts` gains an optional `engine` parameter appended to `FormData`.
+
+**Settings page** (`src/frontend/src/pages/SettingsPage.tsx`)
+- Route: `/settings`
+- Single card: "Gemini API Key" — password input + Save button
+- On save: `POST /api/settings/api-keys`, shows inline success/error feedback
+- Uses `GET /api/settings/api-keys` on mount to show current configured state
+
+**Navigation** — add "Settings" link to `AppShell` / `Layout` sidebar or top-nav.
+
+**JobSummary display** — `JobStatusBadge` or `MetadataBar` shows engine as a small pill
+(e.g., "Docling", "PaddleOCR", "Gemini").
+
+**api.ts additions:**
+```typescript
+export type EngineType = 'docling' | 'paddleocr' | 'gemini'
+export async function uploadPdf(file: File, engine?: EngineType): Promise<UploadResponse>
+export async function getApiKeyStatus(): Promise<{ gemini_configured: boolean }>
+export async function saveGeminiApiKey(key: string): Promise<{ gemini_configured: boolean }>
+```
 
 ## Sprint Plan
 
-### Sprint 1: Markdown Viewer Test Coverage
-Goal: Add `MOCK_MARKDOWN_PAGES` + `MOCK_MARKDOWN_PAGE_*` fixtures, update `helpers.ts` to
-mock the two new endpoints, and add `markdown-viewer.spec.ts` with full pagination coverage.
-All 18 existing Playwright tests must remain green.
+### Sprint 1: Engine abstraction + PaddleOCR backend
+**Goal:** Swap-in architecture is in place; PaddleOCR parser runs end-to-end and produces a
+valid v2 result; `engine` is stored on the Job and returned from the API.
 
-Scope:
-- [ ] Add `MOCK_MARKDOWN_PAGES`, `MOCK_MARKDOWN_PAGE_1`, `MOCK_MARKDOWN_PAGE_2`,
-      `MOCK_MARKDOWN_PAGE_3` constants to `src/frontend/e2e/fixtures.ts` and export them
-- [ ] Import new fixtures in `helpers.ts`
-- [ ] Add route mock for `**/api/jobs/*/markdown/pages/*` (single page dispatch) in
-      `mockAllApis` in `helpers.ts` — extract page number from URL and return matching fixture
-- [ ] Add route mock for `**/api/jobs/*/markdown/pages` (pages list) in `mockAllApis`
-      in `helpers.ts` — register AFTER the single-page mock
-- [ ] Create `src/frontend/e2e/markdown-viewer.spec.ts`:
-  - `describe('MarkdownTab Pagination')` block with `beforeEach` calling `mockAllApis`
-  - Test: "Prev button is disabled on first page"
-  - Test: "Next button is enabled on first page"
-  - Test: "Next click advances page indicator to 2 / 3"
-  - Test: "Page content changes after Next click"
-  - Test: "Next button is disabled on last page"
-  - Test: "Prev button is enabled after advancing past page 1"
-  - Test: "Prev click after Next returns to page 1 content"
-  - Test: "Scroll resets to top after page navigation"
-- [ ] (Nice-to-have) Test: "Fallback mode renders full content when pages endpoint returns 404"
-      — use `page.route()` override inside the test to return 404 for the pages list endpoint,
-      then verify full `MOCK_MARKDOWN` text renders and no page indicator is visible
+**Scope:**
+- [ ] Add `engine` column to `Job` model (SQLAlchemy, String 20, default `"docling"`)
+- [ ] Update `upload.py` to accept `engine` form field and store it on the Job row
+- [ ] Update `_run_parse_job` with dispatch block (docling / paddleocr / gemini)
+- [ ] Implement `src/backend/services/parser_paddleocr.py` with `parse_pdf_paddleocr()`
+- [ ] Add `engine` field to `JobSummary` TypedDict / response schema in jobs route
+- [ ] Update `reprocess` endpoint to accept optional `engine` JSON body field
+- [ ] Write `src/tests/test_engine_dispatch.py` covering: upload with `engine=docling` stores correctly, upload with `engine=paddleocr` stores correctly, dispatch routes to correct parser
+- [ ] Update `JobSummary` TypeScript interface with `engine` field
 
-Success criteria (each independently verifiable):
-- `npx playwright test --project=chromium markdown-viewer` exits with 0 and reports
-  8+ passed, 0 failed
-- `npx playwright test --project=chromium` exits with 0 and all 18+ tests pass (no
-  regressions in `document-viewer.spec.ts`, `navigation.spec.ts`, `sidebar.spec.ts`,
-  `upload-delete.spec.ts`)
-- `npm run build` in `src/frontend` exits with 0 (TypeScript compiles cleanly)
-- `npx eslint . --ext ts,tsx --max-warnings 0` in `src/frontend` exits with 0
+**Success criteria (testable):**
+- `POST /api/upload` with `engine=paddleocr` → `GET /api/jobs/{id}` returns `"engine": "paddleocr"`
+- `POST /api/upload` with no `engine` field → job `engine` is `"docling"`
+- `POST /api/upload` with `engine=paddleocr` on a real PDF completes with `status: "completed"` and `element_count > 0`
+- `pytest src/tests/test_engine_dispatch.py` passes (mocking out the heavy parsers)
+- Engine field appears in job list JSON response
 
-Out of scope:
-- Backend changes of any kind
-- Adding `aria-label` or `data-testid` attributes to `MarkdownTab.tsx` (acceptable only if
-  the scroll-reset test is otherwise unwritable; treat as last resort)
-- Keyboard navigation tests (deferred to a future Sprint)
-- Accessibility audits
+**Out of scope:** Gemini parser, Settings UI, frontend engine selector
+
+---
+
+### Sprint 2: Gemini Flash parser + Settings API + API key management UI
+**Goal:** Gemini Flash engine is usable end-to-end when an API key is configured; Settings page
+is navigable and persists the key.
+
+**Scope:**
+- [ ] Implement `src/backend/services/parser_gemini.py` with `parse_pdf_gemini()`
+- [ ] Add `GEMINI_API_KEY` reading to `src/backend/config.py`
+- [ ] Implement `src/backend/routes/settings.py` with `GET /api/settings/api-keys` and `POST /api/settings/api-keys`
+- [ ] Register settings router in `main.py` under `/api`
+- [ ] Write `src/tests/test_settings.py` covering key storage, retrieval of `gemini_configured` status, key never exposed in GET response
+- [ ] Add `SettingsPage.tsx` with Gemini API key input form
+- [ ] Add `/settings` route to React Router config
+- [ ] Add "Settings" nav link in `AppShell`/`Layout`
+- [ ] Implement `getApiKeyStatus()` and `saveGeminiApiKey()` in `api.ts`
+- [ ] Add engine pill display to `MetadataBar` and `JobList` rows
+
+**Success criteria (testable):**
+- `GET /api/settings/api-keys` returns `{ "gemini_configured": false }` when no key set
+- `POST /api/settings/api-keys` with `{ "gemini_api_key": "test-key" }` → subsequent GET returns `{ "gemini_configured": true }`
+- GET response never contains the raw key string
+- Navigating to `/settings` renders the key input form (Playwright: `page.goto('/settings')` → input with label "Gemini API Key" is visible)
+- `POST /api/upload` with `engine=gemini` on a small PDF (mocked Gemini API) completes with `status: "completed"`
+- `pytest src/tests/test_settings.py` passes
+
+**Out of scope:** Frontend engine selector in upload flow (that is Sprint 3)
+
+---
+
+### Sprint 3: Engine selector UI + upload integration
+**Goal:** Users can choose the extraction engine before uploading; Gemini option is gated by API
+key availability; engine is shown on job cards.
+
+**Scope:**
+- [ ] Implement `EngineSelector.tsx` component with three option cards
+- [ ] Wire `EngineSelector` into `HomePage` / `UploadZone` — selected engine state managed in `HomePage`
+- [ ] Update `uploadPdf()` in `api.ts` to accept and pass optional `engine` parameter
+- [ ] Update `UploadZone` props to accept `engine` and pass it through to `uploadPdf()`
+- [ ] Fetch `gemini_configured` status in `HomePage` (or a new `useEngineConfig` hook) on mount to enable/disable Gemini option
+- [ ] Display engine pill in `JobList` row (`SidebarDocItem` and/or table row)
+- [ ] Display engine in `MetadataBar` on job detail page
+- [ ] Playwright E2E test: engine selector renders, selecting "PaddleOCR 3" then uploading results in a job with `engine: "paddleocr"` in the API response
+- [ ] Playwright E2E test: Gemini option is locked when `gemini_configured = false` (mock the settings endpoint)
+
+**Success criteria (testable):**
+- Playwright: `EngineSelector` renders three cards with correct labels
+- Playwright: clicking "PaddleOCR 3" card makes it visually selected (aria-checked or data-selected)
+- Playwright: uploading with PaddleOCR selected → job detail shows "PaddleOCR" pill in metadata
+- Playwright: Gemini card has `aria-disabled` when `gemini_configured` is false
+- Playwright: navigating to `/settings`, entering a key and saving → Gemini card becomes enabled on `/`
+- All existing Playwright specs continue to pass
+
+**Out of scope:** Per-engine advanced options, PaddleOCR language hint UI
+
+---
 
 ## Design Direction
-This Sprint adds no new UI. Design direction applies only to future MarkdownTab work.
 
-- **Mood / Identity**: Developer utility — calm, functional, content-forward. The
-  navigation chrome should recede so document content is the primary visual element.
-- **Color direction**: Cool-neutral. `bg-white` nav bar with `border-b` separator.
-  Buttons use `text-gray-600` at rest, `hover:bg-gray-100` on hover, `disabled:opacity-30`
-  at boundary. No primary-color accent on navigation arrows.
-- **Reference style**: VS Code editor tab panel — the UI surface becomes invisible and
-  the document content fills the viewport.
-- **Anti-patterns**: No floating page input fields, no progress bars, no skeleton loaders
-  for page transitions, no color-coded page indicators, no pill-style page number buttons.
-- **Key UX moments**: Page transition snap-in should feel immediate on fast connections.
-  The only perceptible state change is the page indicator number and the content text.
+**Mood / Identity:** Focused developer tooling — precise, low-distraction, information-dense.
+Think "VS Code sidebar meets Notion table view". Purposeful whitespace, no decorative
+illustrations, every pixel justifies its presence.
 
-## Risks & Dependencies
+**Color direction:** Cool neutral base (slate/zinc grays) with a single sharp accent color —
+indigo-500 for active/selected states. No warm tones except amber for warnings (e.g., "API key
+missing"). Dark mode not required in this sprint but the palette should not fight it.
 
-| Risk | Mitigation |
-|------|-----------|
-| Route matching order: `pages/*` shadowed by `pages` glob | Register single-page mock first in `mockAllApis`; test both endpoints independently in `markdown-viewer.spec.ts` |
-| Unicode button text `\u2039`/`\u203a` may not match Playwright locator reliably | Use `locator('button').filter({ hasText: '\u2039' })` pattern; fall back to `nth(0)`/`nth(1)` button locators within the nav bar if needed |
-| `document-viewer.spec.ts` "output tabs switch correctly" breaks if page-1 mock content lacks "Parsed Document" | Design constraint: `MOCK_MARKDOWN_PAGE_1.content` must begin with `# Parsed Document` |
-| `fixtures.ts` may approach 300-line limit after additions | Keep fixture content strings to one short paragraph each; split into `fixtures-markdown.ts` and re-export from `fixtures.ts` if the file exceeds 280 lines post-edit |
-| Scroll-reset assertion requires finding the scrollable div with no data-testid | Use `.overflow-y-auto` CSS class selector; if the selector is ambiguous, add `data-testid="markdown-content"` to the content div in `MarkdownTab.tsx` as a minimal targeted change |
+**Reference style:** Linear's engine selector cards adapted to a lighter background.
+Stripe Docs' settings form aesthetic for the API key panel.
+
+**Anti-patterns:**
+- No gradient backgrounds behind cards
+- No rounded-2xl "bubbly" cards — prefer rounded-lg or rounded-md
+- No hero banners, taglines, or marketing copy anywhere in the upload flow
+- Do not use the default Tailwind blue for the selected-engine accent; use indigo
+- Do not show a spinner overlay on the entire page during upload — only the upload button/zone reacts
+
+**Key UX moments deserving extra polish:**
+1. **Engine selector card selection** — the transition from unselected to selected should be immediate (no animation delay), with a left-border accent (4 px solid indigo-500) and a subtle background shift (indigo-50). The card should feel like a toggle switch, not a form field.
+2. **Gemini locked state** — the locked card must clearly communicate "you need a key" without being alarming. Use a small lock icon (16 px), muted text color, and an inline "→ Settings" text link, not a blocking modal.
+3. **Settings save feedback** — after `POST /api/settings/api-keys` succeeds, show a green "Saved" inline badge that auto-hides after 3 seconds, replacing the Save button label temporarily. No toast libraries required — inline state is sufficient.
+4. **Engine pill on job cards** — the pill should be visually compact: 1–2 word label, xs text, neutral-700 on neutral-100 background for Docling; indigo-700 on indigo-50 for PaddleOCR; violet-700 on violet-50 for Gemini. This creates quick visual scanability across the job list.
+
+## Tech Stack Decisions
+
+- **PaddleOCR 3** is installed as `paddleocr>=3.0.0` in `requirements.txt`, marked as optional with a comment. The import is guarded so the app starts normally if PaddleOCR is absent — only jobs using that engine will fail with a clear error message.
+- **Gemini SDK**: `google-generativeai>=0.8.0` added to `requirements.txt`, also optional-guarded. Uses `gemini-2.0-flash` model ID.
+- **pypdfium2** is already installed transitively via docling; use it directly in both new parsers for page rendering — no additional PDF rendering dependency needed.
+- **python-dotenv `set_key()`** is used for persisting the API key; `python-dotenv` is already in `requirements.txt`. The `.env` file is at `BASE_DIR / ".env"`.
+- No new frontend dependencies required. Engine selector built with plain Tailwind + React state.
+
+## Risks
+
+- **PaddleOCR 3 install footprint**: PaddleOCR has heavy GPU/CPU deps (~1 GB). Mitigation: document as optional, import-guarded, and tested with a mock in CI.
+- **Gemini rate limits on large PDFs**: page-by-page sequential calls may be slow for 100+ page documents. Mitigation: sequential with 0.5 s delay is acceptable for MVP; note a batch/async upgrade path in code comments.
+- **`.env` write permission**: on some deployments the `.env` file or its directory may be read-only. Mitigation: `settings.py` catches `PermissionError` and returns HTTP 500 with a clear message suggesting manual configuration.
+- **Schema drift between engines**: PaddleOCR and Gemini parsers may produce fewer element types (no `table`, no `section_header` without heuristics). Mitigation: downstream consumers (chunker, exporter) already handle the minimal `text`-only element set; no changes to those services are needed in these sprints.
+- **SQLite column migration**: adding `engine` column requires a schema change. Mitigation: in dev, `create_tables()` auto-creates; document that a production migration is `ALTER TABLE jobs ADD COLUMN engine VARCHAR(20) DEFAULT 'docling'`.
