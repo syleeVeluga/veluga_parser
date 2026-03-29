@@ -9,3 +9,6 @@ pytest-asyncio==1.3.0
 aiofiles==25.1.0
 langdetect==1.0.9
 docling==2.82.0
+# Optional OCR VL engines — install only if using these engines
+# paddleocr>=3.0.0
+# google-generativeai>=0.8.0

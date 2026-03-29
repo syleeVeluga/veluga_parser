@@ -6,10 +6,13 @@ import hashlib
 import json
 import logging
 import shutil
+import time
 import uuid
 from pathlib import Path
+from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from src.backend.config import MAX_UPLOAD_SIZE_BYTES, UPLOAD_DIR
@@ -29,10 +32,12 @@ def _compute_sha256(path: Path) -> str:
     return sha256.hexdigest()
 
 
+_VALID_ENGINES = {"docling", "paddleocr", "gemini"}
+
+
 def _run_parse_job(job_id: str, file_path: Path, image_dir: Path) -> None:
-    """Background task: run docling parser and save results to DB."""
+    """Background task: dispatch to the correct parser and save results to DB."""
     from src.backend.database import SessionLocal
-    from src.backend.services.parser import parse_pdf
 
     db = SessionLocal()
     try:
@@ -44,7 +49,20 @@ def _run_parse_job(job_id: str, file_path: Path, image_dir: Path) -> None:
         job.status = "running"
         db.commit()
 
-        result = parse_pdf(file_path, image_dir)
+        engine = getattr(job, "engine", "docling") or "docling"
+        t0 = time.monotonic()
+
+        if engine == "paddleocr":
+            from src.backend.services.parser_paddleocr import parse_pdf_paddleocr as _parse
+            result = _parse(file_path, image_dir)
+        elif engine == "gemini":
+            from src.backend.services.parser_gemini import parse_pdf_gemini as _parse
+            result = _parse(file_path, image_dir)
+        else:
+            from src.backend.services.parser import parse_pdf as _parse
+            result = _parse(file_path, image_dir)
+
+        parse_duration = time.monotonic() - t0
 
         from src.backend.services.structure_analyzer import analyze_structure
         result = analyze_structure(file_path, result)
@@ -93,6 +111,7 @@ def _run_parse_job(job_id: str, file_path: Path, image_dir: Path) -> None:
         job.has_equations = bool(meta.get("has_equations", False))
         job.has_code = bool(meta.get("has_code", False))
         job.has_structure = bool(meta.get("has_structure_analysis", False))
+        job.parse_duration_seconds = round(parse_duration, 2)
         db.commit()
         logger.info(f"Job {job_id} completed successfully")
 
@@ -112,8 +131,13 @@ def _run_parse_job(job_id: str, file_path: Path, image_dir: Path) -> None:
 async def upload_pdf(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    engine: Optional[str] = Form(default="docling"),
     db: Session = Depends(get_db),
 ):
+    # Validate engine
+    if engine not in _VALID_ENGINES:
+        engine = "docling"
+
     # Validate MIME type
     if file.content_type not in ("application/pdf", "application/octet-stream"):
         # Also allow by extension
@@ -148,6 +172,7 @@ async def upload_pdf(
         file_path=str(input_path),
         file_hash=file_hash,
         status="pending",
+        engine=engine or "docling",
     )
     db.add(job)
     db.commit()
@@ -163,10 +188,15 @@ async def upload_pdf(
     }
 
 
+class ReprocessRequest(BaseModel):
+    engine: Optional[str] = None
+
+
 @router.post("/jobs/{job_id}/reprocess")
 async def reprocess_job(
     job_id: str,
     background_tasks: BackgroundTasks,
+    body: Optional[ReprocessRequest] = None,
     db: Session = Depends(get_db),
 ):
     """Re-run parsing + chunking on an existing job without re-uploading."""
@@ -179,6 +209,10 @@ async def reprocess_job(
     file_path = Path(job.file_path) if job.file_path else None
     if not file_path or not file_path.exists():
         raise HTTPException(status_code=410, detail="Original PDF no longer on disk")
+
+    # Apply engine override if provided
+    if body and body.engine and body.engine in _VALID_ENGINES:
+        job.engine = body.engine
 
     # Delete old result
     old_result = db.query(ParsedResult).filter(ParsedResult.job_id == job_id).first()

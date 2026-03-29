@@ -127,6 +127,8 @@ export interface ParsedResult {
   chunks?: Record<'hierarchical' | 'semantic' | 'hybrid', Chunk[]>
 }
 
+export type EngineType = 'docling' | 'paddleocr' | 'gemini'
+
 export interface JobSummary {
   job_id: string
   filename: string
@@ -138,6 +140,8 @@ export interface JobSummary {
   chunk_count?: number | null
   has_equations?: boolean | null
   has_code?: boolean | null
+  engine: EngineType
+  parse_duration_seconds?: number | null
   error_message: string | null
   created_at: string
   updated_at: string

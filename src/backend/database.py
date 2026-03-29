@@ -39,6 +39,8 @@ _JOB_MIGRATIONS = [
     "ALTER TABLE jobs ADD COLUMN has_equations BOOLEAN DEFAULT 0",
     "ALTER TABLE jobs ADD COLUMN has_code BOOLEAN DEFAULT 0",
     "ALTER TABLE jobs ADD COLUMN has_structure BOOLEAN DEFAULT 0",
+    "ALTER TABLE jobs ADD COLUMN engine VARCHAR(20) DEFAULT 'docling'",
+    "ALTER TABLE jobs ADD COLUMN parse_duration_seconds REAL",
 ]
 
 _RESULT_MIGRATIONS = [

@@ -37,6 +37,8 @@ def _job_to_dict(job: Job) -> dict:
         "chunk_count": getattr(job, "chunk_count", None),
         "has_equations": getattr(job, "has_equations", None),
         "has_code": getattr(job, "has_code", None),
+        "engine": getattr(job, "engine", "docling") or "docling",
+        "parse_duration_seconds": getattr(job, "parse_duration_seconds", None),
         "error_message": job.error_message,
         "created_at": job.created_at.isoformat() + "Z" if job.created_at else None,
         "updated_at": job.updated_at.isoformat() + "Z" if job.updated_at else None,

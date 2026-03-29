@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, DateTime, Integer, Text
+from sqlalchemy import String, DateTime, Float, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from src.backend.database import Base
 
@@ -26,6 +26,8 @@ class Job(Base):
     has_equations: Mapped[bool | None] = mapped_column(nullable=True, default=False)
     has_code: Mapped[bool | None] = mapped_column(nullable=True, default=False)
     has_structure: Mapped[bool | None] = mapped_column(nullable=True, default=False)
+    engine: Mapped[str] = mapped_column(String(20), nullable=False, default="docling")
+    parse_duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
