@@ -34,3 +34,10 @@ def get_db():
 def create_tables():
     from src.backend.models import job, result  # noqa: F401 — register models
     Base.metadata.create_all(bind=engine)
+    # Migrate: add deleted_at column if not present (idempotent)
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN deleted_at DATETIME"))
+            conn.commit()
+        except Exception:
+            pass  # Column already exists
